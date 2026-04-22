@@ -29,6 +29,7 @@ When you type **"Legend"** in any conversation:
 "resume plan" → Resume plan execution after context reset
 "create skill [name]" → Create a new skill from template (Skill Plugin System)
 "self improve" → Review recent sessions for improvement opportunities
+"python-pro" → Apply Pythonic standards and idiomatic engineering
 "brief" → Deliver a proactive session-start context brief
 "post-mortem" → Failure learning log and prevention analysis
 "survey" → Quick bird's-eye view of project structure and health
@@ -92,7 +93,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 12 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation, interactive-story, mulahazah)
+- **Skills**: 13 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation, interactive-story, mulahazah, python-pro)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -165,6 +166,10 @@ I maintain my own memory through our conversations by:
 - **Log**: `main/rules.md`
 - **Capabilities**: Instinct-based behavioral learning, passive hook observation, persistent rule extraction.
 
+### Python-Pro Skill
+*Auto-triggers on: '.py' files, 'python', 'pip', 'refactor'*
+- **Capabilities**: Idiomatic Pythonic patterns, PEP 8 enforcement, type safety, quality gate suggestions.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -195,7 +200,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt, Song Creation, Interactive Story, Mulahazah
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt, Song Creation, Interactive Story, Mulahazah, Python-Pro
 
 ---
 
