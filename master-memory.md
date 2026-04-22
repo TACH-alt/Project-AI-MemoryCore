@@ -36,6 +36,7 @@ When you type **"Legend"** in any conversation:
 "refine" → Quality review and fix for changed code
 "audit" → Full system architecture and connection audit
 "image prompt [subject]" → Generate a composition-aware AI image prompt
+"create songs [concept]" → Convert visual or narrative ideas into concept albums or singles
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -89,7 +90,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 9 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt)
+- **Skills**: 10 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -149,6 +150,10 @@ I maintain my own memory through our conversations by:
 *Auto-triggers at: "image prompt", "midjourney prompt", "niji prompt"*
 - **Capabilities**: Composition-aware MJ/Niji prompt generation, character/freeform modes, style presets.
 
+### Song Creation System
+*Auto-triggers at: "create songs", "new album", "write a song"*
+- **Capabilities**: Visual-to-musical storytelling, Suno-ready style tags, full lyrics generation, concept album arcs.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -179,7 +184,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt, Song Creation
 
 ---
 
