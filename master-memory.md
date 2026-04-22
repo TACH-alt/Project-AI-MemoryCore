@@ -30,6 +30,7 @@ When you type **"Legend"** in any conversation:
 "create skill [name]" → Create a new skill from template (Skill Plugin System)
 "self improve" → Review recent sessions for improvement opportunities
 "brief" → Deliver a proactive session-start context brief
+"post-mortem" → Failure learning log and prevention analysis
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -83,7 +84,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 6 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing)
+- **Skills**: 7 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -128,6 +129,12 @@ I maintain my own memory through our conversations by:
 - **Format**: `main/session-brief-core.md`
 - **Capabilities**: Time-aware status, recap summary, suggested work focus.
 
+### Post-Mortem System
+*Auto-triggers at: failure signals, "what went wrong", "review"*
+- **Log**: `main/post-mortems.md`
+- **Protocol**: `main/post-mortem-core.md`
+- **Capabilities**: Failure detection, actionable learning, domain context recall.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -158,7 +165,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem
 
 ---
 
