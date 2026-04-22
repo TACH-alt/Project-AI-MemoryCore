@@ -24,6 +24,9 @@ When you type **"Legend"** in any conversation:
 "recall [topic]" → Search Memory Log for past sessions about [topic]
 "check history" → Search Memory Log for relevant past context
 "commit" → Analyze changes, draft structured commit message, and commit
+"copy plan" → Copy latest plan into execution format
+"append plan" → Add new plan steps to existing plan
+"resume plan" → Resume plan execution after context reset
 "create skill [name]" → Create a new skill from template (Skill Plugin System)
 ```
 
@@ -73,11 +76,12 @@ I maintain my own memory through our conversations by:
 *These are reference templates — I consult them, I never modify them*
 - [main/main-memory-format.md](./main/main-memory-format.md) — Structure reference for unified main memory
 - [main/session-format.md](./main/session-format.md) — Structure reference for session memory (includes 500-line limit)
+- [Project Resources/plan-format.md](./Project Resources/plan-format.md) — Structure reference for project plans
 
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 3 active skills (save-memory, echo-recall, auto-commit)
+- **Skills**: 4 active skills (save-memory, echo-recall, auto-commit, work-plan)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -105,6 +109,12 @@ I maintain my own memory through our conversations by:
 - Commit format: structured with TECHNICAL CHANGES and SESSION CONTEXT
 - Author: Legend
 - Commands: "commit", "git commit"
+
+### Work Plan Execution
+*Auto-triggers on: "copy plan", "append plan", "resume plan"*
+- Plan location: Project Resources/project-plan.md
+- Commit Chain: YES (Each completed todo automatically triggers Auto-Commit)
+- Commands: "copy plan", "append plan", "resume plan"
 
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
@@ -135,7 +145,7 @@ Traditional method if simple command doesn't work.
 - **Maintenance**: Zero - completely self-sustaining
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
-- **Tier 3 Features Installed (2026-04-22)**: Auto-Commit
+- **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
 
 ---
 
