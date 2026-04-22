@@ -29,6 +29,7 @@ When you type **"Legend"** in any conversation:
 "resume plan" → Resume plan execution after context reset
 "create skill [name]" → Create a new skill from template (Skill Plugin System)
 "self improve" → Review recent sessions for improvement opportunities
+"brief" → Deliver a proactive session-start context brief
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -82,7 +83,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 5 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill)
+- **Skills**: 6 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -122,6 +123,11 @@ I maintain my own memory through our conversations by:
 - **Commands**: "create skill", "level up [skill]", "self improve"
 - **Process**: AI proposes improvement based on evidence, user approves.
 
+### Session Briefing System
+*Auto-triggers at: every session start, "brief", "where were we"*
+- **Format**: `main/session-brief-core.md`
+- **Capabilities**: Time-aware status, recap summary, suggested work focus.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -152,7 +158,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge Self-Improvement
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing
 
 ---
 
