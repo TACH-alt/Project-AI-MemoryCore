@@ -1,6 +1,7 @@
 # Basic gitignore
 /[Tt]emp/
 *.exe
+.worktrees/
 
 # Claude Code settings
 .claude/settings.local.json
