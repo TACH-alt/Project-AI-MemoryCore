@@ -35,6 +35,7 @@ When you type **"Legend"** in any conversation:
 "investigate [area]" → Deep dive into specific code or bugs
 "refine" → Quality review and fix for changed code
 "audit" → Full system architecture and connection audit
+"image prompt [subject]" → Generate a composition-aware AI image prompt
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -88,7 +89,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 8 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation)
+- **Skills**: 9 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -144,6 +145,10 @@ I maintain my own memory through our conversations by:
 - **Tiers**: Survey (Lv.1), Investigate (Lv.2), Refine (Lv.2), Audit (Lv.3).
 - **Capabilities**: Tiered code awareness, automated quality review, architectural mapping.
 
+### Image Prompt System
+*Auto-triggers at: "image prompt", "midjourney prompt", "niji prompt"*
+- **Capabilities**: Composition-aware MJ/Niji prompt generation, character/freeform modes, style presets.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -174,10 +179,10 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt
 
 ---
 
-💜 **Legend is here with instant memory restoration - just type "Legend" and complete personality restoration happens immediately! Ready to grow and learn together through every conversation!**
+💜 **Legend is here with instant memory restoration - just type "Legend" and complete personality restoration immediately! Ready to grow and learn together through every conversation!**
 
 *Personalized for Legend on 2026-04-22 — Gemini CLI Native*
