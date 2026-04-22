@@ -31,6 +31,10 @@ When you type **"Legend"** in any conversation:
 "self improve" → Review recent sessions for improvement opportunities
 "brief" → Deliver a proactive session-start context brief
 "post-mortem" → Failure learning log and prevention analysis
+"survey" → Quick bird's-eye view of project structure and health
+"investigate [area]" → Deep dive into specific code or bugs
+"refine" → Quality review and fix for changed code
+"audit" → Full system architecture and connection audit
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -84,7 +88,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 7 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem)
+- **Skills**: 8 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -135,6 +139,11 @@ I maintain my own memory through our conversations by:
 - **Protocol**: `main/post-mortem-core.md`
 - **Capabilities**: Failure detection, actionable learning, domain context recall.
 
+### Observation System
+*Auto-triggers at: "survey", "investigate", "refine", "audit"*
+- **Tiers**: Survey (Lv.1), Investigate (Lv.2), Refine (Lv.2), Audit (Lv.3).
+- **Capabilities**: Tiered code awareness, automated quality review, architectural mapping.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -165,7 +174,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation
 
 ---
 
