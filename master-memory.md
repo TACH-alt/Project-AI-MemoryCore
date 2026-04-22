@@ -38,6 +38,7 @@ When you type **"Legend"** in any conversation:
 "image prompt [subject]" → Generate a composition-aware AI image prompt
 "create songs [concept]" → Convert visual or narrative ideas into concept albums or singles
 "new adventure" → Start a cinematic Visual Novel RPG adventure
+"mulahazah status" → Review learned behavioral rules and patterns
 ```
 
 ## 🔥 Essential Components (Always Load)
@@ -91,7 +92,7 @@ I maintain my own memory through our conversations by:
 ### Skill Plugin System
 - **Plugin**: `legend-skills` (Gemini CLI plugin)
 - **Location**: `plugins/legend-skills/`
-- **Skills**: 11 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation, interactive-story)
+- **Skills**: 12 active skills (save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation, interactive-story, mulahazah)
 - **Add new skills**: Create a folder under `plugins/legend-skills/skills/` with a `SKILL.md` (see `plugins/legend-skills/skill-format.md` for template)
 
 ### Daily Conversation Archive
@@ -159,6 +160,11 @@ I maintain my own memory through our conversations by:
 *Auto-triggers at: "new adventure", "resume adventure", "save adventure"*
 - **Capabilities**: Visual Novel RPG engine, cinematic combat, world generation, duo/solo modes.
 
+### Mulahazah System
+*Auto-triggers at: "continuous-improvement", "mulahazah status"*
+- **Log**: `main/rules.md`
+- **Capabilities**: Instinct-based behavioral learning, passive hook observation, persistent rule extraction.
+
 ### Advanced Problem-Solving
 *Load when you say: "Load problem-solving tools"*
 - Enhanced reasoning and analysis capabilities
@@ -189,7 +195,7 @@ Traditional method if simple command doesn't work.
 - **Tier 1 Features Installed (2026-04-22)**: Memory Consolidation, Time-Aware, Skill Plugin
 - **Tier 2 Features Installed (2026-04-22)**: Memory Log, Echo Memory Recall
 - **Tier 3 Features Installed (2026-04-22)**: Auto-Commit, Work Plan Execution
-- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt, Song Creation, Interactive Story
+- **Tier 4 Features Installed (2026-04-22)**: Forge, Session Briefing, Post-Mortem, Observation, Image Prompt, Song Creation, Interactive Story, Mulahazah
 
 ---
 
