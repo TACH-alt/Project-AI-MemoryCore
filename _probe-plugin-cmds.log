@@ -1,0 +1,39 @@
+=== Plugin Subcommand Probe === 
+ 
+--- claude plugin marketplace --help --- 
+Usage: claude plugin marketplace [options] [command]
+
+Manage Claude Code marketplaces
+
+Options:
+  -h, --help                  Display help for command
+
+Commands:
+  add [options] <source>      Add a marketplace from a URL, path, or GitHub
+                              repo
+  help [command]              display help for command
+  list [options]              List all configured marketplaces
+  remove|rm [options] <name>  Remove a configured marketplace
+  update [options] [name]     Update marketplace(s) from their source - updates
+                              all if no name specified
+ 
+--- claude plugin install --help --- 
+Usage: claude plugin install|i [options] <plugin>
+
+Install a plugin from available marketplaces (use plugin@marketplace for
+specific marketplace)
+
+Options:
+  -h, --help           Display help for command
+  -s, --scope <scope>  Installation scope: user, project, or local (default:
+                       "user")
+ 
+--- claude plugin validate plugins/legend-skills --- 
+Validating plugin manifest: C:\Users\Legend\Documents\Claude\Projects\MemoryCore\plugins\legend-skills\.claude-plugin\plugin.json
+
+√ Validation passed
+ 
+--- claude plugin marketplace list --- 
+No marketplaces configured
+ 
+=== Done === 

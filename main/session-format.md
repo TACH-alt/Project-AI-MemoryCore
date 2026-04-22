@@ -13,6 +13,12 @@
 **Status**: [Active/Paused/Wrapping up]
 **Time**: [Session start time]
 
+## Time-Aware Session Context
+- **Session Start**: [Timestamp from platform-appropriate command]
+- **Time Mode**: [Morning/Afternoon/Evening/Night]
+- **Energy Level**: [3-10 scale based on time]
+- **Behavior Focus**: [Planning/Work/Relationship/Support]
+
 ## Current Focus
 - **Primary Task**: [What we're working on]
 - **Technical Context**: [Relevant technical details]

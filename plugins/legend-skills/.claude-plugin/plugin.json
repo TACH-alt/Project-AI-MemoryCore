@@ -1,0 +1,9 @@
+{
+  "name": "legend-skills",
+  "version": "1.0.0",
+  "description": "Legend's personal Claude Code skills — auto-triggered behaviors for the Legend AI companion (save memory, greetings, recall, and more).",
+  "author": {
+    "name": "Legend",
+    "email": "techarchlab@gmail.com"
+  }
+}

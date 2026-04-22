@@ -1,0 +1,48 @@
+=== Claude CLI Probe === 
+Date: Wed 22/04/2026 11:47:21.93 
+ 
+--- PATH check (where claude) --- 
+INFO: Could not find files for the given pattern(s).
+INFO: Could not find files for the given pattern(s).
+INFO: Could not find files for the given pattern(s).
+ 
+--- Common install paths --- 
+[miss ] C:\Users\Legend\AppData\Local\Programs\claude\claude.exe 
+[miss ] C:\Users\Legend\AppData\Local\Programs\claude\claude.cmd 
+[miss ] C:\Users\Legend\AppData\Local\Programs\claude-code\claude.exe 
+[miss ] C:\Users\Legend\AppData\Local\Programs\claude-code\claude.cmd 
+[miss ] C:\Users\Legend\AppData\Local\AnthropicClaude\claude.exe 
+[miss ] C:\Users\Legend\AppData\Roaming\npm\claude.cmd 
+[miss ] C:\Users\Legend\AppData\Roaming\npm\claude.ps1 
+[miss ] C:\Users\Legend\AppData\Roaming\npm\claude 
+[miss ] C:\Users\Legend\.claude\bin\claude.exe 
+[miss ] C:\Users\Legend\.claude\bin\claude.cmd 
+[miss ] C:\Users\Legend\.claude\local\claude.exe 
+[miss ] C:\Users\Legend\.claude\local\claude 
+[miss ] C:\Users\Legend\.local\bin\claude.exe 
+[miss ] C:\Users\Legend\.local\bin\claude 
+[miss ] C:\Program Files\Claude\claude.exe 
+[miss ] C:\Program Files\Anthropic\Claude\claude.exe 
+ 
+--- node/npm check --- 
+C:\Program Files\nodejs\node.exe
+C:\Program Files\nodejs\npm
+C:\Program Files\nodejs\npm.cmd
+C:\Users\Legend\AppData\Roaming\npm\node_modules
+ 
+--- npm global list (claude-code related) --- 
+npm error code ENOENT
+npm error syscall lstat
+npm error path C:\Users\Legend\AppData\Roaming\npm
+npm error errno -4058
+npm error enoent ENOENT: no such file or directory, lstat 'C:\Users\Legend\AppData\Roaming\npm'
+npm error enoent This is related to npm not being able to find a file.
+npm error enoent
+npm error A complete log of this run can be found in: C:\Users\Legend\AppData\Local\npm-cache\_logs\2026-04-22T03_47_24_502Z-debug-0.log
+ 
+--- Broader search: C:\Users\Legend --- 
+C:\Users\Legend\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude-code\2.1.111\claude.exe
+ 
+--- Scan C:\Users\Legend\AppData\Local\Programs --- 
+ 
+=== Done === 
