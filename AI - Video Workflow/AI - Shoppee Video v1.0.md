@@ -2,7 +2,7 @@
 
 **Project name:** AI - Shoppee Video v1.0  
 **Date opened:** 2026-04-23  
-**Status:** Implementation planning started  
+**Status:** Local v1.0 scaffold and runner implemented  
 **Owner:** Legend
 
 ## Purpose
@@ -58,12 +58,21 @@ Output File
 - Created design spec: `docs/superpowers/specs/2026-04-23-ai-shoppee-video-v1-design.md`.
 - Created implementation plan: `docs/superpowers/plans/2026-04-23-ai-shoppee-video-v1-implementation.md`.
 - Created this Obsidian project note: `AI - Video Workflow/AI - Shoppee Video v1.0.md`.
+- Created local project scaffold under `AI - Shoppee Video v1.0/`.
+- Created masterlist files: `List of Link Shopee VIdeo.csv` and `List of Link Shopee VIdeo.xlsx`.
+- Created processor script: `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`.
+- Created manual runner: `AI - Shoppee Video v1.0/scripts/run_shopee_video_workflow.ps1`.
+- Created unit tests: `AI - Shoppee Video v1.0/tests/test_process_shopee_video.py`.
+
+## Verification
+
+- Unit tests pass with `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v` when run outside the sandbox.
+- Manual runner dry-run passes with `powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\run_shopee_video_workflow.ps1' -DryRun`.
+- FFmpeg is not currently on PATH, so edited `_new.mp4` rendering will require installing FFmpeg or adding it to PATH.
 
 ## Next Actions
 
-- Build the local project scaffold.
-- Create the masterlist workbook and CSV.
-- Implement the Python processor and PowerShell runner.
-- Run unit tests and dry-run verification.
-- Save session memory and daily diary updates after implementation.
-
+- Copy or merge the worktree output back to the main workspace.
+- Import/open the `.xlsx` masterlist in Google Sheets if a native Google Sheet is required.
+- Install FFmpeg for video rendering.
+- Add a real approved seller media link row and run a first live test.

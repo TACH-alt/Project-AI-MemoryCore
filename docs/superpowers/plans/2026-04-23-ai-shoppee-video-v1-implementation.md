@@ -40,7 +40,7 @@
 - Create: `AI - Shoppee Video v1.0/output/.gitkeep`
 - Create: `AI - Shoppee Video v1.0/logs/run-log.csv`
 
-- [ ] **Step 1: Create folders**
+- [x] **Step 1: Create folders**
 
 Run:
 
@@ -50,7 +50,7 @@ New-Item -ItemType Directory -Force -Path '.\AI - Shoppee Video v1.0\masterlist'
 
 Expected: directories exist.
 
-- [ ] **Step 2: Create CSV masterlist**
+- [x] **Step 2: Create CSV masterlist**
 
 Write `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.csv` with:
 
@@ -59,7 +59,7 @@ Date,Product Link,Product Name,Shop Name,Source Type,Status,Notes,Last Processed
 ,,,,Auto,Pending,,,,
 ```
 
-- [ ] **Step 3: Create run log**
+- [x] **Step 3: Create run log**
 
 Write `AI - Shoppee Video v1.0/logs/run-log.csv` with:
 
@@ -67,7 +67,7 @@ Write `AI - Shoppee Video v1.0/logs/run-log.csv` with:
 timestamp,row_number,product_link,product_name,shop_name,status,message,output_file
 ```
 
-- [ ] **Step 4: Commit scaffold**
+- [x] **Step 4: Commit scaffold**
 
 Run:
 
@@ -83,7 +83,7 @@ Expected: commit succeeds.
 **Files:**
 - Create: `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.xlsx`
 
-- [ ] **Step 1: Build workbook**
+- [x] **Step 1: Build workbook**
 
 Create a workbook with one sheet named `List of Link Shopee VIdeo`. Headers:
 
@@ -107,11 +107,11 @@ Source Type: Auto, Approved Media, Shopee Page
 Status: Pending, Downloaded, Edited, Failed, Skipped
 ```
 
-- [ ] **Step 2: Verify workbook**
+- [x] **Step 2: Verify workbook**
 
 Inspect the header row and first editable row. Expected: headers match exactly and the first editable row has `Source Type = Auto`, `Status = Pending`.
 
-- [ ] **Step 3: Commit workbook**
+- [x] **Step 3: Commit workbook**
 
 Run:
 
@@ -127,7 +127,7 @@ Expected: commit succeeds.
 **Files:**
 - Create: `AI - Shoppee Video v1.0/tests/test_process_shopee_video.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Test these functions before implementation:
 
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run:
 
@@ -211,7 +211,7 @@ Expected: FAIL with module or function import errors.
 **Files:**
 - Create: `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`
 
-- [ ] **Step 1: Implement helper functions and CLI**
+- [x] **Step 1: Implement helper functions and CLI**
 
 Implement:
 
@@ -234,7 +234,7 @@ The CLI accepts:
 --dry-run
 ```
 
-- [ ] **Step 2: Run helper tests**
+- [x] **Step 2: Run helper tests**
 
 Run:
 
@@ -244,7 +244,7 @@ python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit script and tests**
+- [x] **Step 3: Commit script and tests**
 
 Run:
 
@@ -260,7 +260,7 @@ Expected: commit succeeds.
 **Files:**
 - Create: `AI - Shoppee Video v1.0/scripts/run_shopee_video_workflow.ps1`
 
-- [ ] **Step 1: Create runner**
+- [x] **Step 1: Create runner**
 
 The runner sets `$ProjectRoot`, points to `masterlist/List of Link Shopee VIdeo.csv`, checks Python, then runs:
 
@@ -268,7 +268,7 @@ The runner sets `$ProjectRoot`, points to `masterlist/List of Link Shopee VIdeo.
 python "$ProjectRoot\scripts\process_shopee_video.py" --project-root "$ProjectRoot" --masterlist "$ProjectRoot\masterlist\List of Link Shopee VIdeo.csv"
 ```
 
-- [ ] **Step 2: Smoke test dry run**
+- [x] **Step 2: Smoke test dry run**
 
 Run:
 
@@ -278,7 +278,7 @@ powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\run_
 
 Expected: exits successfully and reports zero pending usable rows or dry-run actions.
 
-- [ ] **Step 3: Commit runner**
+- [x] **Step 3: Commit runner**
 
 Run:
 
@@ -294,7 +294,7 @@ Expected: commit succeeds.
 **Files:**
 - Create or modify: `AI - Video Workflow/AI - Shoppee Video v1.0.md`
 
-- [ ] **Step 1: Add project note**
+- [x] **Step 1: Add project note**
 
 Include:
 
