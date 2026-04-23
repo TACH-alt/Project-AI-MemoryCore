@@ -215,6 +215,7 @@ real time, not just file modification dates.
 - **Session 5 (2026-04-23)**: Extended `AI - Shoppee Video v1.0` with `Done` tracking, CSV-to-`.xlsm` sync, a local browser frontend for masterlist input and download triggering, and Desktop shortcuts for manual workflow/frontend launch.
 - **Session 6 (2026-04-23)**: Diagnosed repeated `AI - Shoppee Video v1.0` failures for Shopee product/share links. Confirmed that Shopee pages do not expose downloadable product media through current tools; workflow failure notes were updated to request approved seller media/direct file links.
 - **Session 7 (2026-04-23)**: Revised the diagnosis and upgraded `AI - Shoppee Video v1.0` to scrape publicly exposed mobile SEO media from full Shopee product URLs. The Electrova full product URL now downloads one seller video, renders a captioned 1080x1920 `_new.mp4`, and updates the masterlist row to `Edited` / `Done = TRUE`.
+- **Session 8 (2026-04-23)**: Saved and committed the Shopee Electrova output run, then mirrored AI video workflow project notes into the Legendary Obsidian vault under `05-Projects/AI - Video Workflow`, including a new index note linked from Dashboard, daily note, and session note.
 - **Ongoing**: *[Will track recurring themes, preferences, and patterns]*
 
 ## Core Purpose

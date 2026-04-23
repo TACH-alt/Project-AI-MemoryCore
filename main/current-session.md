@@ -47,6 +47,8 @@
 - Desktop shortcuts: `C:\Users\Legend\Desktop\AI Shoppee Video - Run Workflow.lnk` and `C:\Users\Legend\Desktop\AI Shoppee Video - Frontend.lnk`.
 - Repeated failures observed for SKL Furniture KAI and Electrova Cordless UV Mite were re-diagnosed. Root cause refined: `yt-dlp` and Shopee item APIs still fail, but mobile SEO HTML for full Shopee product URLs can expose seller media. The workflow now handles full product URLs like `...-i.297985880.25153849822`, strips tracking query parameters, extracts Shopee CDN media, and downloads one best product video when available.
 - Live Electrova test succeeded on 2026-04-23: output file `AI - Shoppee Video v1.0/output/Electrova Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4`; verified H.264, 1080x1920, 59.633s. The real masterlist row is now `Edited` and `Done = TRUE`.
+- Save point commit `2ed50ba` preserved the latest Electrova output run, including raw/edited videos and updated masterlist/logs.
+- Legendary Obsidian vault updated at `C:\Users\Legend\Desktop\Obsidian\Legendary\05-Projects\AI - Video Workflow\` with mirrored project notes and a new `AI - Video Workflow Index.md`. Dashboard, daily note, and session note now link to the project topic.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*
