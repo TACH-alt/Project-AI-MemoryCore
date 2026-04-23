@@ -29,9 +29,9 @@
 
 ### Active Context
 - **Current Topic**: Shopee Video affiliate automation with Google Drive/Sheet-style masterlist, approved seller media download, and local FFmpeg-based editing.
-- **Immediate Goals**: Keep project files in the synced workspace, maintain Obsidian project notes for every project `.md` change, and prepare for first live media-row test.
+- **Immediate Goals**: Save memory/diary, check workflow tooling updates, run needed upgrades, install or enable FFmpeg/yt-dlp if available, and test the workflow with Shopee product link `https://shopee.com.my/product/32632559/41452031782`.
 - **Recent Progress**: Created and committed `AI - Shoppee Video v1.0` scaffold, `List of Link Shopee VIdeo` CSV/XLSX masterlist, Python processor, PowerShell runner, unit tests, design spec, implementation plan, and Obsidian note.
-- **Next Steps**: Install or add FFmpeg to PATH, open/import the `.xlsx` masterlist into Google Sheets if desired, add a real approved seller media link, then run the workflow dry-run and live run.
+- **Next Steps**: Preserve the current Drive-renamed `.xlsm` masterlist, keep CSV as the automation source, run dependency checks/upgrades, add a test CSV row for the Shopee product link, run dry-run and live workflow tests, then record results in the Obsidian project note.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -40,6 +40,7 @@
 - New standing project rule: whenever planning, analysis, or workflow decisions change, update the matching Obsidian `.md` file inside the active project folder.
 - For `AI - Shoppee Video v1.0`, approved seller media links are preferred; Shopee product-page scraping is best-effort and must not bypass captcha, login, DRM, or platform protections.
 - Native Google Sheet creation was not available through a connected tool in this session, so v1.0 creates a polished `.xlsx` and CSV masterlist in the Google Drive-synced folder.
+- Google Drive or Excel appears to have renamed the workbook from `List of Link Shopee VIdeo.xlsx` to `List of Link Shopee VIdeo.xlsm`; do not revert that user/Drive change unless Legend requests it.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*
