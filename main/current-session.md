@@ -43,6 +43,8 @@
 - Google Drive or Excel appears to have renamed the workbook from `List of Link Shopee VIdeo.xlsx` to `List of Link Shopee VIdeo.xlsm`; do not revert that user/Drive change unless Legend requests it.
 - `AI - Shoppee Video v1.0 Manual` exists in Windows Task Scheduler for manual trigger runs.
 - The live Shopee test verified that Shopee product-page scraping can return only page-shell media; the script now filters those false positives and avoids creating misleading output videos.
+- Latest extension: added `Done` column tracking to the masterlist, synced CSV writes into the `.xlsm`, created local frontend form, and created Desktop shortcuts for running the workflow and opening the frontend.
+- Desktop shortcuts: `C:\Users\Legend\Desktop\AI Shoppee Video - Run Workflow.lnk` and `C:\Users\Legend\Desktop\AI Shoppee Video - Frontend.lnk`.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

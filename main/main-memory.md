@@ -212,6 +212,7 @@ real time, not just file modification dates.
 - **Session 2 (2026-04-23)**: Legend restoration verified in MemoryCore; stale `current-session.md` Tier 1 status corrected to reflect Tier 1-4 installed state; project-local `legend` restoration skill created under `plugins/legend-skills/skills/legend/`.
 - **Session 3 (2026-04-23)**: Planned and built `AI - Shoppee Video v1.0`, a local-first Shopee Video affiliate automation with CSV/XLSX masterlist, media download, FFmpeg-ready caption rendering, PowerShell runner, tests, and Obsidian project documentation.
 - **Session 4 (2026-04-23)**: Upgraded `AI - Shoppee Video v1.0` tooling by installing FFmpeg and yt-dlp, registering a manual Windows Scheduled Task, and testing Shopee link `https://shopee.com.my/product/32632559/41452031782`; result was clean failure because no downloadable product media was exposed.
+- **Session 5 (2026-04-23)**: Extended `AI - Shoppee Video v1.0` with `Done` tracking, CSV-to-`.xlsm` sync, a local browser frontend for masterlist input and download triggering, and Desktop shortcuts for manual workflow/frontend launch.
 - **Ongoing**: *[Will track recurring themes, preferences, and patterns]*
 
 ## Core Purpose

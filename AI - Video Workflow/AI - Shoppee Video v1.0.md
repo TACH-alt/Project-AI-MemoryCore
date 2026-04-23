@@ -36,6 +36,7 @@ Product Name
 Shop Name
 Source Type
 Status
+Done
 Notes
 Last Processed At
 Output Folder
@@ -83,6 +84,8 @@ https://shopee.com.my/product/32632559/41452031782
 - Google Drive or Excel appears to have renamed `List of Link Shopee VIdeo.xlsx` to `List of Link Shopee VIdeo.xlsm`.
 - The automation source remains `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.csv`.
 - The `.xlsm` file should be preserved unless Legend explicitly asks to convert it back.
+- Added `Done` as a checkbox-style tracking column. The automation writes `TRUE` only when a row reaches `Downloaded` or `Edited`; failed and pending rows stay `FALSE`.
+- The CSV remains the automation source, and the `.xlsm` masterlist is synced from the CSV whenever the workflow/frontend writes the CSV.
 
 ### Upgrade Results
 
@@ -118,6 +121,46 @@ Current conclusion:
 - The workflow is working for control flow, status updates, dependency discovery, logging, and safe failure handling.
 - The supplied Shopee product page does not expose downloadable approved seller media to this local scraper.
 - For production use, add approved seller media/direct video links in `Product Link` whenever possible.
+
+## Local Frontend And Manual Shortcuts
+
+### Frontend
+
+Created a local browser frontend:
+
+```text
+AI - Shoppee Video v1.0/scripts/shoppee_video_frontend.py
+```
+
+Start script:
+
+```text
+AI - Shoppee Video v1.0/scripts/start_shoppee_video_frontend.ps1
+```
+
+Frontend behavior:
+
+- Shows input fields matching the masterlist.
+- Provides `Save` to update the CSV masterlist and sync the `.xlsm`.
+- Provides `Download` to save the row, run the workflow, and open the output folder.
+- Provides `Open Output Folder` for manual access to completed/raw video folders.
+
+### Desktop Shortcuts
+
+Created Desktop shortcuts:
+
+```text
+C:\Users\Legend\Desktop\AI Shoppee Video - Run Workflow.lnk
+C:\Users\Legend\Desktop\AI Shoppee Video - Frontend.lnk
+```
+
+`AI Shoppee Video - Run Workflow.lnk` runs the automation and opens:
+
+```text
+AI - Shoppee Video v1.0/output/
+```
+
+`AI Shoppee Video - Frontend.lnk` starts the local browser frontend.
 
 ## Verification
 

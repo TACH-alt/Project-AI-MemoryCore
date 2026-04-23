@@ -12,6 +12,7 @@ from process_shopee_video import (
     build_caption,
     build_product_folder_name,
     derive_output_name,
+    ensure_masterlist_columns,
     filter_media_urls,
     find_executable,
     is_direct_media_url,
@@ -52,6 +53,7 @@ class HelperTests(unittest.TestCase):
                         "Shop Name",
                         "Source Type",
                         "Status",
+                        "Done",
                         "Notes",
                         "Last Processed At",
                         "Output Folder",
@@ -67,6 +69,7 @@ class HelperTests(unittest.TestCase):
                         "Shop Name": "Cool Shop",
                         "Source Type": "Approved Media",
                         "Status": "Pending",
+                        "Done": "FALSE",
                     }
                 )
             rows = load_rows(path)
@@ -115,6 +118,7 @@ class HelperTests(unittest.TestCase):
     def test_update_record_clears_stale_output_file_when_no_outputs(self):
         record = {
             "Status": "Edited",
+            "Done": "TRUE",
             "Notes": "old",
             "Last Processed At": "",
             "Output Folder": "old-folder",
@@ -122,7 +126,65 @@ class HelperTests(unittest.TestCase):
         }
         update_record(record, "Failed", "No downloadable media found", Path("folder"), [])
         self.assertEqual(record["Status"], "Failed")
+        self.assertEqual(record["Done"], "FALSE")
         self.assertEqual(record["Output File"], "")
+
+    def test_update_record_marks_done_when_downloaded_or_edited(self):
+        for status in ("Downloaded", "Edited"):
+            record = {
+                "Status": "Pending",
+                "Done": "FALSE",
+                "Notes": "",
+                "Last Processed At": "",
+                "Output Folder": "",
+                "Output File": "",
+            }
+            update_record(record, status, "ok", Path("folder"), [Path("video_new.mp4")])
+            self.assertEqual(record["Done"], "TRUE")
+
+    def test_ensure_masterlist_columns_adds_done_to_existing_csv(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            path = Path(tmp) / "master.csv"
+            path.write_text(
+                "Date,Product Link,Product Name,Shop Name,Source Type,Status,Notes,Last Processed At,Output Folder,Output File\n"
+                "2026-04-23,https://example.com/video.mp4,Mini Fan,Cool Shop,Approved Media,Pending,,,,\n",
+                encoding="utf-8-sig",
+            )
+            ensure_masterlist_columns(path)
+            with path.open("r", newline="", encoding="utf-8-sig") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertIn("Done", rows[0])
+            self.assertEqual(rows[0]["Done"], "FALSE")
+
+    def test_write_masterlist_syncs_existing_workbook(self):
+        from openpyxl import Workbook, load_workbook
+        from process_shopee_video import write_masterlist
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            csv_path = Path(tmp) / "master.csv"
+            workbook_path = Path(tmp) / "master.xlsx"
+            workbook = Workbook()
+            workbook.active.title = "List of Link Shopee VIdeo"
+            workbook.save(workbook_path)
+
+            write_masterlist(csv_path, [{
+                "Date": "2026-04-23",
+                "Product Link": "https://example.com/video.mp4",
+                "Product Name": "Mini Fan",
+                "Shop Name": "Cool Shop",
+                "Source Type": "Approved Media",
+                "Status": "Downloaded",
+                "Done": "TRUE",
+                "Notes": "ok",
+                "Last Processed At": "",
+                "Output Folder": "",
+                "Output File": "",
+            }])
+
+            updated = load_workbook(workbook_path)
+            sheet = updated["List of Link Shopee VIdeo"]
+            self.assertEqual(sheet.cell(1, 7).value, "Done")
+            self.assertEqual(sheet.cell(2, 7).value, "TRUE")
 
 
 if __name__ == "__main__":

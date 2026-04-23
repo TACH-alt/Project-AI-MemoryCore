@@ -27,6 +27,7 @@ REQUIRED_COLUMNS = [
     "Shop Name",
     "Source Type",
     "Status",
+    "Done",
     "Notes",
     "Last Processed At",
     "Output Folder",
@@ -132,13 +133,41 @@ def build_ytdlp_command(
     ]
 
 
+def default_value_for_column(column: str) -> str:
+    defaults = {
+        "Source Type": "Auto",
+        "Status": "Pending",
+        "Done": "FALSE",
+    }
+    return defaults.get(column, "")
+
+
+def normalize_record(record: dict[str, str]) -> dict[str, str]:
+    normalized = {}
+    for column in REQUIRED_COLUMNS:
+        value = record.get(column)
+        normalized[column] = (value if value not in (None, "") else default_value_for_column(column)).strip()
+    return normalized
+
+
+def ensure_masterlist_columns(masterlist_path: Path) -> None:
+    if not masterlist_path.exists():
+        rows: list[dict[str, str]] = []
+    else:
+        with masterlist_path.open("r", newline="", encoding="utf-8-sig") as handle:
+            reader = csv.DictReader(handle)
+            rows = [normalize_record(row) for row in reader]
+    write_masterlist(masterlist_path, rows)
+
+
 def read_masterlist(masterlist_path: Path) -> list[dict[str, str]]:
+    ensure_masterlist_columns(masterlist_path)
     with masterlist_path.open("r", newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         missing = [column for column in REQUIRED_COLUMNS if column not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"Masterlist is missing required columns: {', '.join(missing)}")
-        return [{column: (row.get(column) or "").strip() for column in REQUIRED_COLUMNS} for row in reader]
+        return [normalize_record(row) for row in reader]
 
 
 def write_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> None:
@@ -146,6 +175,59 @@ def write_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=REQUIRED_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
+    sync_excel_masterlist(masterlist_path, rows)
+
+
+def find_workbook_path(masterlist_path: Path) -> Path | None:
+    for suffix in (".xlsm", ".xlsx"):
+        candidate = masterlist_path.with_suffix(suffix)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def sync_excel_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> None:
+    workbook_path = find_workbook_path(masterlist_path)
+    if workbook_path is None:
+        return
+    try:
+        from openpyxl import Workbook, load_workbook
+    except ImportError:
+        return
+
+    keep_vba = workbook_path.suffix.lower() == ".xlsm"
+    if workbook_path.exists():
+        workbook = load_workbook(workbook_path, keep_vba=keep_vba)
+    else:
+        workbook = Workbook()
+    sheet = workbook["List of Link Shopee VIdeo"] if "List of Link Shopee VIdeo" in workbook.sheetnames else workbook.active
+    sheet.title = "List of Link Shopee VIdeo"
+    if sheet.max_row:
+        sheet.delete_rows(1, sheet.max_row)
+    if sheet.max_column:
+        sheet.delete_cols(1, sheet.max_column)
+    for column_index, header in enumerate(REQUIRED_COLUMNS, start=1):
+        sheet.cell(1, column_index).value = header
+    for row_index, row in enumerate(rows, start=2):
+        normalized = normalize_record(row)
+        for column_index, header in enumerate(REQUIRED_COLUMNS, start=1):
+            sheet.cell(row_index, column_index).value = normalized[header]
+    widths = {
+        "A": 14,
+        "B": 44,
+        "C": 28,
+        "D": 22,
+        "E": 18,
+        "F": 16,
+        "G": 12,
+        "H": 34,
+        "I": 22,
+        "J": 36,
+        "K": 36,
+    }
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+    workbook.save(workbook_path)
 
 
 def master_row_from_record(record: dict[str, str], row_number: int) -> MasterRow:
@@ -407,6 +489,7 @@ def append_log(log_path: Path, row: MasterRow, status: str, message: str, output
 
 def update_record(record: dict[str, str], status: str, notes: str, output_folder: Path | None, output_files: Iterable[Path]) -> None:
     record["Status"] = status
+    record["Done"] = "TRUE" if status in {"Downloaded", "Edited"} else "FALSE"
     record["Notes"] = notes
     record["Last Processed At"] = datetime.now().isoformat(timespec="minutes")
     if output_folder:

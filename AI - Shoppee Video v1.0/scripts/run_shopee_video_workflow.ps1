@@ -1,6 +1,7 @@
 param(
     [switch]$DryRun,
-    [switch]$Force
+    [switch]$Force,
+    [switch]$OpenOutput
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,4 +45,14 @@ Write-Host "Project root: $ProjectRoot"
 Write-Host "Masterlist: $Masterlist"
 
 & $Python.Source @ArgsList
-exit $LASTEXITCODE
+$ExitCode = $LASTEXITCODE
+
+if ($OpenOutput) {
+    $OutputRoot = Join-Path $ProjectRoot "output"
+    if (-not (Test-Path -LiteralPath $OutputRoot)) {
+        New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
+    }
+    Start-Process explorer.exe -ArgumentList "`"$OutputRoot`""
+}
+
+exit $ExitCode
