@@ -10,7 +10,7 @@
 **Session Type**: Work (system setup)
 **Current Project**: AI - Shoppee Video v1.0 automation
 **Status**: Active
-**Time**: 2026-04-23
+**Time**: 2026-04-24
 
 ## Time-Aware Session Context
 *Populated at session start via Time Intelligence protocol (see main/main-memory.md)*
@@ -29,9 +29,9 @@
 
 ### Active Context
 - **Current Topic**: Shopee Video affiliate automation with Google Drive/Sheet-style masterlist, approved seller media download, and local FFmpeg-based editing.
-- **Immediate Goals**: Save the latest user feedback, document the short-link failure as unsupported, analyze raw versus edited video quality, and write the next-phase plan for LAN frontend access, lighter editing, and editor handoff.
+- **Immediate Goals**: Execute the saved future-improvements plan task-by-task, starting with LAN/private-network frontend access only, while keeping MemoryCore and the Legendary Obsidian mirror updated.
 - **Recent Progress**: Created and committed `AI - Shoppee Video v1.0` scaffold, `List of Link Shopee VIdeo` CSV/XLSX masterlist, Python processor, PowerShell runner, unit tests, design spec, implementation plan, and Obsidian note.
-- **Next Steps**: Use full Shopee product URLs or approved media links only, not short redirect links. Decide whether to execute the future-improvements plan inline or task-by-task.
+- **Next Steps**: Task 1 is complete. Next step is Task 2: lighter rendering with audio preservation, unless Legend wants more LAN polish first.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -53,6 +53,7 @@
 - Raw versus edited analysis on the Electrova sample found a meaningful regression: raw video contains AAC stereo audio, while the edited `_new.mp4` has no audio stream. The current vertical blur composition is too heavy for already-usable square videos.
 - New planning note created: `AI - Video Workflow/AI - Shoppee Video Future Improvements.md`.
 - New implementation plan created: `docs/superpowers/plans/2026-04-23-ai-shoppee-video-v1-future-improvements.md`.
+- Task 1 of the future-improvements plan is now complete on 2026-04-24. The frontend supports private-network access via `-Lan`, prints both localhost and LAN URLs, and manual verification showed `http://10.10.10.5:8766/` as the LAN address during testing.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

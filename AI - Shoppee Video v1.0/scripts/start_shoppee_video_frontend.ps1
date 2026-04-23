@@ -1,5 +1,6 @@
 param(
-    [int]$Port = 8765
+    [int]$Port = 8765,
+    [switch]$Lan
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,4 +18,16 @@ if (-not $Python) {
     throw "Python was not found on PATH."
 }
 
-& $Python.Source $Frontend --project-root $ProjectRoot --port $Port
+$ArgsList = @(
+    $Frontend,
+    "--project-root",
+    $ProjectRoot,
+    "--port",
+    $Port
+)
+
+if ($Lan) {
+    $ArgsList += @("--host", "0.0.0.0")
+}
+
+& $Python.Source @ArgsList

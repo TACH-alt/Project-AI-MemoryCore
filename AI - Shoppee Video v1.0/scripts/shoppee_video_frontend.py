@@ -4,6 +4,7 @@ import argparse
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import webbrowser
@@ -331,6 +332,34 @@ def open_output_folder(project_root: Path) -> None:
     subprocess.Popen(["explorer.exe", str(project_root / "output")])
 
 
+def detect_lan_ip() -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+    except OSError:
+        pass
+
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        if ip and not ip.startswith("127."):
+            return ip
+    except OSError:
+        return None
+    return None
+
+
+def build_access_urls(host: str, port: int, local_ip: str | None = None) -> list[str]:
+    if host == "0.0.0.0":
+        urls = [f"http://127.0.0.1:{port}/"]
+        if local_ip and local_ip != "127.0.0.1":
+            urls.append(f"http://{local_ip}:{port}/")
+        return urls
+    return [f"http://{host}:{port}/"]
+
+
 class FrontendHandler(BaseHTTPRequestHandler):
     project_root: Path
     masterlist_path: Path
@@ -396,10 +425,12 @@ def run_server(project_root: Path, host: str, port: int, open_browser: bool) -> 
     FrontendHandler.masterlist_path = project_root / "masterlist" / "List of Link Shopee VIdeo.csv"
     ensure_masterlist_columns(FrontendHandler.masterlist_path)
     server = ThreadingHTTPServer((host, port), FrontendHandler)
-    url = f"http://{host}:{port}/"
-    print(f"AI - Shoppee Video v1.0 frontend: {url}")
+    urls = build_access_urls(host, port, detect_lan_ip() if host == "0.0.0.0" else None)
+    print("AI - Shoppee Video v1.0 frontend:")
+    for url in urls:
+        print(f"  {url}")
     if open_browser:
-        webbrowser.open(url)
+        webbrowser.open(urls[0])
     server.serve_forever()
 
 

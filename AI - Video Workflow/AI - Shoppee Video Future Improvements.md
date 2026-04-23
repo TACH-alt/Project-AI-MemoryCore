@@ -54,6 +54,10 @@ Visual comparison:
 
 ## 1. Private-Network Frontend Access
 
+### Status
+
+- Completed on 2026-04-24.
+
 ### What Can Be Done
 
 - Bind the local frontend to `0.0.0.0` instead of only `127.0.0.1`.
@@ -71,6 +75,17 @@ Visual comparison:
 - Add a `-Lan` switch in `start_shoppee_video_frontend.ps1`.
 - Add a matching `--host 0.0.0.0` option in `shoppee_video_frontend.py`.
 - Print both localhost and LAN URLs.
+
+### What Was Implemented
+
+- `shoppee_video_frontend.py` now prints both localhost and LAN URLs when bound to `0.0.0.0`.
+- `start_shoppee_video_frontend.ps1` now accepts `-Lan`.
+- Manual verification showed:
+
+```text
+http://127.0.0.1:8766/
+http://10.10.10.5:8766/
+```
 
 ## 2. Better Video Editing Strategy
 
@@ -121,9 +136,8 @@ Visual comparison:
 
 ## Recommended Sequence
 
-1. Add private-network frontend access.
-2. Fix the video pipeline first: preserve audio and make editing lighter.
-3. Add editor handoff so Legend can finish stronger videos in CapCut.
+1. Fix the video pipeline first: preserve audio and make editing lighter.
+2. Add editor handoff so Legend can finish stronger videos in CapCut.
 
 ## Main Implementation Plan
 

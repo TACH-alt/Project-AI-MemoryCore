@@ -45,7 +45,7 @@
 - Modify: `AI - Shoppee Video v1.0/scripts/start_shoppee_video_frontend.ps1`
 - Test: `AI - Shoppee Video v1.0/tests/test_shoppee_video_frontend.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_default_frontend_host_is_localhost():
@@ -53,25 +53,29 @@ def test_default_frontend_host_is_localhost():
     assert args.host == "127.0.0.1"
 
 
-def test_frontend_accepts_lan_host_flag():
-    args = parse_args(["--host", "0.0.0.0", "--port", "8765", "--no-browser"])
-    assert args.host == "0.0.0.0"
-    assert args.port == 8765
+def test_build_access_urls_for_lan_binding_includes_localhost_and_lan():
+    assert build_access_urls("0.0.0.0", 8765, "192.168.0.10") == [
+        "http://127.0.0.1:8765/",
+        "http://192.168.0.10:8765/",
+    ]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -p 'test_shoppee_video_frontend.py' -v`
 
-Expected: FAIL because LAN host coverage is missing.
+Expected: FAIL because `build_access_urls` does not exist yet.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
-def lan_access_url(host: str, port: int, local_ip: str | None) -> str:
-    if host == "0.0.0.0" and local_ip:
-        return f"http://{local_ip}:{port}/"
-    return f"http://{host}:{port}/"
+def build_access_urls(host: str, port: int, local_ip: str | None = None) -> list[str]:
+    if host == "0.0.0.0":
+        urls = [f"http://127.0.0.1:{port}/"]
+        if local_ip and local_ip != "127.0.0.1":
+            urls.append(f"http://{local_ip}:{port}/")
+        return urls
+    return [f"http://{host}:{port}/"]
 ```
 
 ```powershell
@@ -88,13 +92,13 @@ if ($Lan) {
 & $Python.Source @Args
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -p 'test_shoppee_video_frontend.py' -v`
 
 Expected: PASS.
 
-- [ ] **Step 5: Manual verification**
+- [x] **Step 5: Manual verification**
 
 Run:
 
@@ -108,7 +112,15 @@ Expected:
 - Console also prints a home-network URL such as `http://192.168.x.x:8765/`
 - Phone or another device on the same Wi-Fi can open that LAN URL
 
-- [ ] **Step 6: Commit**
+Actual verification:
+
+```text
+AI - Shoppee Video v1.0 frontend:
+  http://127.0.0.1:8766/
+  http://10.10.10.5:8766/
+```
+
+- [x] **Step 6: Commit**
 
 ```bash
 git add "AI - Shoppee Video v1.0/scripts/shoppee_video_frontend.py" "AI - Shoppee Video v1.0/scripts/start_shoppee_video_frontend.ps1" "AI - Shoppee Video v1.0/tests/test_shoppee_video_frontend.py"

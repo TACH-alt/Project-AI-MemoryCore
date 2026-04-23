@@ -255,6 +255,46 @@ AI - Shoppee Video v1.0/output/
 - FFmpeg is installed through WinGet and is discovered by the workflow.
 - Live Electrova Shopee product-page test produced a captioned `_new.mp4` at 1080x1920.
 
+## LAN Frontend Upgrade - 2026-04-24
+
+Implemented:
+
+- Added LAN-friendly frontend URL generation in `shoppee_video_frontend.py`.
+- Added LAN IP detection for private-network use.
+- Added `-Lan` switch to `start_shoppee_video_frontend.ps1`.
+- Kept browser-open behavior pointed at localhost while still binding the server to all interfaces.
+
+How to run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\start_shoppee_video_frontend.ps1' -Lan
+```
+
+Expected access:
+
+```text
+http://127.0.0.1:8765/
+http://<your-lan-ip>:8765/
+```
+
+Manual verification result:
+
+```text
+AI - Shoppee Video v1.0 frontend:
+  http://127.0.0.1:8766/
+  http://10.10.10.5:8766/
+```
+
+Test coverage added:
+
+- frontend default host remains `127.0.0.1`
+- LAN binding builds both localhost and LAN URLs
+
+Current note:
+
+- This is private-network hosting only, not public internet publishing.
+- Windows Firewall may still need local-network allow access on first run.
+
 ## Latest User Test - 2026-04-23
 
 Frontend test result:
@@ -304,4 +344,5 @@ Conclusion:
 - Import/open the `.xlsx` masterlist in Google Sheets if a native Google Sheet is required.
 - Continue using full Shopee product URLs or approved seller media links.
 - Ignore short `s.shopee.com.my` links for future workflow work.
-- Run the Desktop workflow shortcut for the next product row and check `Done`.
+- Task 1 is complete: LAN/private-network frontend access.
+- Next task candidate: lighter renderer with audio preservation.

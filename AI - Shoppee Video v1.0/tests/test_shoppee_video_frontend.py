@@ -6,10 +6,29 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from shoppee_video_frontend import normalize_frontend_row, upsert_masterlist_row
+from shoppee_video_frontend import (
+    build_access_urls,
+    normalize_frontend_row,
+    parse_args,
+    upsert_masterlist_row,
+)
 
 
 class FrontendTests(unittest.TestCase):
+    def test_default_frontend_host_is_localhost(self):
+        args = parse_args([])
+        self.assertEqual(args.host, "127.0.0.1")
+        self.assertEqual(args.port, 8765)
+
+    def test_build_access_urls_for_lan_binding_includes_localhost_and_lan(self):
+        self.assertEqual(
+            build_access_urls("0.0.0.0", 8765, "192.168.0.10"),
+            [
+                "http://127.0.0.1:8765/",
+                "http://192.168.0.10:8765/",
+            ],
+        )
+
     def test_normalize_frontend_row_defaults_done_false(self):
         row = normalize_frontend_row({
             "Date": "2026-04-23",
