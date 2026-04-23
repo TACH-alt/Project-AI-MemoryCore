@@ -14,7 +14,7 @@ Build a local-first automation system for Shopee Video affiliate work. Legend ma
 - Use approved seller media links as the preferred source.
 - Support Shopee product page links as best-effort fallback only.
 - Use a Google Drive-synced project folder as the local operating area.
-- Create a polished `.xlsx` masterlist template and a CSV masterlist that automation can read reliably.
+- Create a polished Excel masterlist template and a CSV masterlist that automation can read reliably.
 - Use FFmpeg for 1080p vertical rendering when installed.
 - Do not bypass captcha, login, DRM, or platform protections.
 - Keep this Obsidian note updated whenever project `.md` files are created or changed.
@@ -47,7 +47,7 @@ Output File
 - `docs/superpowers/specs/2026-04-23-ai-shoppee-video-v1-design.md`
 - `docs/superpowers/plans/2026-04-23-ai-shoppee-video-v1-implementation.md`
 - `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.csv`
-- `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.xlsx`
+- `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.xlsm`
 - `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`
 - `AI - Shoppee Video v1.0/scripts/run_shopee_video_workflow.ps1`
 
@@ -83,6 +83,41 @@ https://shopee.com.my/product/32632559/41452031782
 - Google Drive or Excel appears to have renamed `List of Link Shopee VIdeo.xlsx` to `List of Link Shopee VIdeo.xlsm`.
 - The automation source remains `AI - Shoppee Video v1.0/masterlist/List of Link Shopee VIdeo.csv`.
 - The `.xlsm` file should be preserved unless Legend explicitly asks to convert it back.
+
+### Upgrade Results
+
+- Installed FFmpeg Essentials Build 8.1 through WinGet.
+- Installed/updated yt-dlp to version `2026.3.17` through Python pip.
+- Updated the workflow script so it can find FFmpeg from the WinGet package folder even when the shell alias is not refreshed.
+- Updated the workflow script so it can find yt-dlp from the Python user Scripts folder or fall back to `python -m yt_dlp`.
+- Registered Windows Task Scheduler task `AI - Shoppee Video v1.0 Manual` for manual runs.
+- Test-triggered the scheduled task successfully with `LastTaskResult = 0`.
+
+### Live Test Result
+
+Result for the Shopee product page:
+
+```text
+Failed - No downloadable media found
+```
+
+Root cause:
+
+- `yt-dlp` reports the Shopee URL as unsupported.
+- Shopee product page/API checks returned blocked or non-usable responses.
+- The basic page fallback found Shopee app icon/splash assets, not product media.
+
+Fixes made during testing:
+
+- Changed the renderer from `-vf` to `-filter_complex` for the two-layer 1080p canvas.
+- Filtered out favicon, icon, splash, logo, sprite, and placeholder assets so the workflow does not create misleading videos from Shopee page chrome.
+- Cleared stale `Output File` values when a forced rerun fails after a previous successful/partial run.
+
+Current conclusion:
+
+- The workflow is working for control flow, status updates, dependency discovery, logging, and safe failure handling.
+- The supplied Shopee product page does not expose downloadable approved seller media to this local scraper.
+- For production use, add approved seller media/direct video links in `Product Link` whenever possible.
 
 ## Verification
 

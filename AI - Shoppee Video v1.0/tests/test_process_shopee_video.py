@@ -7,12 +7,17 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from process_shopee_video import (
+    build_ffmpeg_command,
+    build_ytdlp_command,
     build_caption,
     build_product_folder_name,
     derive_output_name,
+    filter_media_urls,
+    find_executable,
     is_direct_media_url,
     load_rows,
     safe_filename,
+    update_record,
 )
 
 
@@ -68,6 +73,56 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0].row_number, 2)
             self.assertEqual(rows[0].product_name, "Mini Fan")
+
+    def test_find_executable_checks_extra_directories(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            tool = Path(tmp) / "tool.exe"
+            tool.write_text("", encoding="utf-8")
+            self.assertEqual(find_executable("missing-tool", [Path(tmp) / "tool.exe"]), str(tool))
+
+    def test_ytdlp_command_falls_back_to_python_module(self):
+        command = build_ytdlp_command(
+            "https://example.com/product",
+            Path("raw"),
+            ytdlp_path=None,
+            python_executable="python",
+            allow_path_lookup=False,
+        )
+        self.assertEqual(command[:3], ["python", "-m", "yt_dlp"])
+
+    def test_filter_media_urls_skips_site_chrome_assets(self):
+        urls = filter_media_urls(
+            [
+                "https://example.com/icon_favicon_1_32.png",
+                "https://example.com/ios_icon_180x180.png",
+                "https://example.com/ios_splash_screen_1080x2340.png",
+                "https://example.com/logo.png",
+                "https://example.com/product-demo.mp4",
+            ]
+        )
+        self.assertEqual(urls, ["https://example.com/product-demo.mp4"])
+
+    def test_ffmpeg_command_uses_complex_filter_for_composited_canvas(self):
+        command = build_ffmpeg_command(
+            "ffmpeg",
+            Path("raw.png"),
+            Path("edited_new.mp4"),
+            "Shop - Product",
+        )
+        self.assertIn("-filter_complex", command)
+        self.assertNotIn("-vf", command)
+
+    def test_update_record_clears_stale_output_file_when_no_outputs(self):
+        record = {
+            "Status": "Edited",
+            "Notes": "old",
+            "Last Processed At": "",
+            "Output Folder": "old-folder",
+            "Output File": "old-file.mp4",
+        }
+        update_record(record, "Failed", "No downloadable media found", Path("folder"), [])
+        self.assertEqual(record["Status"], "Failed")
+        self.assertEqual(record["Output File"], "")
 
 
 if __name__ == "__main__":

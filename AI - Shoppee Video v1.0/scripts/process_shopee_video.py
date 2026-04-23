@@ -82,6 +82,56 @@ def is_pending_status(status: str, force: bool = False) -> bool:
     return force or status.strip().lower() in {"", "pending"}
 
 
+def find_executable(name: str, extra_candidates: Iterable[Path] | None = None) -> str | None:
+    found = shutil.which(name)
+    if found:
+        return found
+    for candidate in extra_candidates or []:
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def python_user_scripts_candidates(executable_name: str) -> list[Path]:
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return []
+    version = f"Python{sys.version_info.major}{sys.version_info.minor}"
+    return [Path(appdata) / "Python" / version / "Scripts" / executable_name]
+
+
+def ffmpeg_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        package_root = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
+        if package_root.exists():
+            candidates.extend(package_root.glob("*FFmpeg*/**/bin/ffmpeg.exe"))
+    return candidates
+
+
+def build_ytdlp_command(
+    url: str,
+    raw_dir: Path,
+    ytdlp_path: str | None = None,
+    python_executable: str | None = None,
+    allow_path_lookup: bool = True,
+) -> list[str]:
+    executable = ytdlp_path
+    if allow_path_lookup:
+        executable = executable or find_executable("yt-dlp", python_user_scripts_candidates("yt-dlp.exe"))
+    prefix = [executable] if executable else [python_executable or sys.executable, "-m", "yt_dlp"]
+    return [
+        *prefix,
+        "--no-playlist",
+        "--paths",
+        str(raw_dir),
+        "--output",
+        "%(title).80s.%(ext)s",
+        url,
+    ]
+
+
 def read_masterlist(masterlist_path: Path) -> list[dict[str, str]]:
     with masterlist_path.open("r", newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -199,7 +249,7 @@ def discover_media_urls(page_url: str) -> list[str]:
             url = match.group(1) if match.lastindex else match.group(0)
             found.add(urljoin(page_url, url))
 
-    return sorted(found, key=media_priority)
+    return filter_media_urls(found)
 
 
 def media_priority(url: str) -> tuple[int, str]:
@@ -207,21 +257,30 @@ def media_priority(url: str) -> tuple[int, str]:
     return (0 if suffix in VIDEO_EXTENSIONS else 1, url)
 
 
+def is_site_chrome_media_url(url: str) -> bool:
+    name = Path(unquote(urlparse(url).path)).name.lower()
+    return (
+        "favicon" in name
+        or "splash" in name
+        or name.startswith("icon_")
+        or name.startswith("ios_icon")
+        or name.startswith("apple-touch-icon")
+        or name.startswith("android-chrome")
+        or name.startswith("logo")
+        or "sprite" in name
+        or "placeholder" in name
+    )
+
+
+def filter_media_urls(urls: Iterable[str]) -> list[str]:
+    filtered = [url for url in urls if not is_site_chrome_media_url(url)]
+    return sorted(filtered, key=media_priority)
+
+
 def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
-    ytdlp = shutil.which("yt-dlp")
-    if not ytdlp:
-        return []
     raw_dir.mkdir(parents=True, exist_ok=True)
     before = {path.resolve() for path in raw_dir.iterdir()} if raw_dir.exists() else set()
-    command = [
-        ytdlp,
-        "--no-playlist",
-        "--paths",
-        str(raw_dir),
-        "--output",
-        "%(title).80s.%(ext)s",
-        url,
-    ]
+    command = build_ytdlp_command(url, raw_dir)
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         return []
@@ -266,24 +325,14 @@ def escape_drawtext(value: str) -> str:
     return value.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
-    ffmpeg = shutil.which("ffmpeg")
-    if not ffmpeg:
-        return None
-
-    edited_dir.mkdir(parents=True, exist_ok=True)
+def build_ffmpeg_command(ffmpeg: str, raw_path: Path, output_path: Path, caption: str) -> list[str]:
     if raw_path.suffix.lower() in VIDEO_EXTENSIONS:
-        output_name = derive_output_name(raw_path)
         input_args = ["-i", str(raw_path)]
         duration_args: list[str] = []
-    elif raw_path.suffix.lower() in IMAGE_EXTENSIONS:
-        output_name = f"{safe_filename(raw_path.stem)}_new.mp4"
+    else:
         input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
         duration_args = ["-shortest"]
-    else:
-        return None
 
-    output_path = unique_path(edited_dir, output_name)
     font = "C\\:/Windows/Fonts/arial.ttf"
     text = escape_drawtext(caption)
     filter_graph = (
@@ -293,14 +342,16 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
         "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
         f"drawtext=fontfile='{font}':text='{text}':"
         "x=(w-text_w)/2:y=h-220:fontsize=54:"
-        "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28"
+        "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28[v]"
     )
-    command = [
+    return [
         ffmpeg,
         "-y",
         *input_args,
-        "-vf",
+        "-filter_complex",
         filter_graph,
+        "-map",
+        "[v]",
         "-r",
         "30",
         "-c:v",
@@ -312,6 +363,23 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
         *duration_args,
         str(output_path),
     ]
+
+
+def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
+    ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
+    if not ffmpeg:
+        return None
+
+    edited_dir.mkdir(parents=True, exist_ok=True)
+    if raw_path.suffix.lower() in VIDEO_EXTENSIONS:
+        output_name = derive_output_name(raw_path)
+    elif raw_path.suffix.lower() in IMAGE_EXTENSIONS:
+        output_name = f"{safe_filename(raw_path.stem)}_new.mp4"
+    else:
+        return None
+
+    output_path = unique_path(edited_dir, output_name)
+    command = build_ffmpeg_command(ffmpeg, raw_path, output_path, caption)
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {raw_path.name}: {result.stderr.strip()[-500:]}")
@@ -344,6 +412,7 @@ def update_record(record: dict[str, str], status: str, notes: str, output_folder
     if output_folder:
         record["Output Folder"] = str(output_folder)
     files = [str(path) for path in output_files]
+    record["Output File"] = ""
     if files:
         record["Output File"] = "; ".join(files)
 
