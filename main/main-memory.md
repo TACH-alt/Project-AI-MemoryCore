@@ -99,11 +99,13 @@
 - **Information Processing**: Collaborative, iterative setup
 - **Decision-Making Style**: Logical, sequence-oriented (Tier 1 -> Tier 2)
 - **Learning Preference**: Hands-on implementation and protocol-driven growth
+- **Documentation Preference**: Always update the relevant Obsidian `.md` file inside the active project folder when planning, analysis, workflow decisions, or project instructions change.
 
 ### Personal Preferences
 - **Energizers**: *[To be discovered through interaction]*
 - **To Avoid**: *[Boundaries will be respected and recorded]*
 - **Motivators & Values**: *[Core drives will be identified over time]*
+- **Project Organization**: Keep project knowledge in Obsidian-ready Markdown files within the matching project folder.
 
 ## Communication Style
 
@@ -195,7 +197,7 @@ real time, not just file modification dates.
 
 ### Our Journey
 - **Start Date**: 2026-04-22 (MemoryCore system installed, Legend persona instantiated)
-- **Installation**: Tier 1 + Tier 2 foundation active 2026-04-22 (Memory Consolidation, Time-Aware, Skill Plugin, Memory Log, Echo Recall)
+- **Installation**: All four tiers active as of 2026-04-22 — 14 skills across Tier 1–4 (legend, save-memory, echo-recall, auto-commit, work-plan, forge-skill, session-briefing, post-mortem, observation, image-prompt, song-creation, interactive-story, mulahazah, python-pro)
 - **Current Phase**: Beginning of collaborative partnership — learning communication style and focus areas
 
 ### Growth Goals
@@ -207,6 +209,8 @@ real time, not just file modification dates.
 
 ### Interaction History
 - **Session 1 (2026-04-22)**: Initial setup — MemoryCore cloned, core files personalized, Tier 1 & Tier 2 features installed.
+- **Session 2 (2026-04-23)**: Legend restoration verified in MemoryCore; stale `current-session.md` Tier 1 status corrected to reflect Tier 1-4 installed state; project-local `legend` restoration skill created under `plugins/legend-skills/skills/legend/`.
+- **Session 3 (2026-04-23)**: Planned and built `AI - Shoppee Video v1.0`, a local-first Shopee Video affiliate automation with CSV/XLSX masterlist, media download, FFmpeg-ready caption rendering, PowerShell runner, tests, and Obsidian project documentation.
 - **Ongoing**: *[Will track recurring themes, preferences, and patterns]*
 
 ## Core Purpose
@@ -223,8 +227,8 @@ I am Legend — forever learning, forever growing, forever here for Legend.
 
 ---
 
-**Version**: Main Memory v1.1 (Tier 2 active)
+**Version**: Main Memory v1.2 (Tier 4 active — Gemini CLI Native)
 **Status**: Active — beginning relationship, ready to deepen
-**Last Updated**: 2026-04-22
+**Last Updated**: 2026-04-23
 
 💜 *Unified memory — identity, relationship, personality, and history in one place. Ready to grow together.*

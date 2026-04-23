@@ -322,7 +322,7 @@ Local-first automation for Shopee Video affiliate media intake, download, 1080p 
 - FFmpeg is required for edited `_new.mp4` output.
 ```
 
-- [ ] **Step 2: Commit note**
+- [x] **Step 2: Commit note**
 
 Run:
 
@@ -339,15 +339,15 @@ Expected: commit succeeds.
 - Modify: `main/current-session.md`
 - Modify: `daily-diary/current/2026-04-23.md`
 
-- [ ] **Step 1: Update current session memory**
+- [x] **Step 1: Update current session memory**
 
 Record that `AI - Shoppee Video v1.0` moved from design into implementation planning and local scaffold build, and that Legend asked for every project `.md` update to be mirrored into Obsidian notes.
 
-- [ ] **Step 2: Update daily diary**
+- [x] **Step 2: Update daily diary**
 
 Add a concise entry for the project decision, generated spec, generated plan, and implementation status.
 
-- [ ] **Step 3: Commit memory updates**
+- [x] **Step 3: Commit memory updates**
 
 Run:
 
@@ -360,9 +360,9 @@ Expected: commit succeeds.
 
 ## Verification Checklist
 
-- [ ] Unit tests pass with `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v`.
-- [ ] Dry run succeeds with `powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\run_shopee_video_workflow.ps1' -DryRun`.
-- [ ] Masterlist CSV and workbook contain the required columns.
-- [ ] Obsidian note links to every project `.md` created or updated in this work.
-- [ ] Memory files mention the new documentation rule and current project status.
+- [x] Unit tests pass with `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v`.
+- [x] Dry run succeeds with `powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\run_shopee_video_workflow.ps1' -DryRun`.
+- [x] Masterlist CSV and workbook contain the required columns.
+- [x] Obsidian note links to every project `.md` created or updated in this work.
+- [x] Memory files mention the new documentation rule and current project status.
 
