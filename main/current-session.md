@@ -29,9 +29,9 @@
 
 ### Active Context
 - **Current Topic**: Shopee Video affiliate automation with Google Drive/Sheet-style masterlist, approved seller media download, and local FFmpeg-based editing.
-- **Immediate Goals**: Save memory/diary, keep `AI - Shoppee Video v1.0` moving, and revise the workflow so full Shopee product URLs can download media when the product media is publicly exposed in mobile SEO HTML. Completed: Shopee product URL cleanup, mobile page media extraction, one-best-video selection, live Electrova workflow test, masterlist success sync.
+- **Immediate Goals**: Save the latest user feedback, document the short-link failure as unsupported, analyze raw versus edited video quality, and write the next-phase plan for LAN frontend access, lighter editing, and editor handoff.
 - **Recent Progress**: Created and committed `AI - Shoppee Video v1.0` scaffold, `List of Link Shopee VIdeo` CSV/XLSX masterlist, Python processor, PowerShell runner, unit tests, design spec, implementation plan, and Obsidian note.
-- **Next Steps**: Test the next full Shopee product URL or approved seller media link through the Desktop/frontend workflow. Short `s.shopee.com.my` share links may still need to be replaced with full product URLs.
+- **Next Steps**: Use full Shopee product URLs or approved media links only, not short redirect links. Decide whether to execute the future-improvements plan inline or task-by-task.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -49,6 +49,10 @@
 - Live Electrova test succeeded on 2026-04-23: output file `AI - Shoppee Video v1.0/output/Electrova Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4`; verified H.264, 1080x1920, 59.633s. The real masterlist row is now `Edited` and `Done = TRUE`.
 - Save point commit `2ed50ba` preserved the latest Electrova output run, including raw/edited videos and updated masterlist/logs.
 - Legendary Obsidian vault updated at `C:\Users\Legend\Desktop\Obsidian\Legendary\05-Projects\AI - Video Workflow\` with mirrored project notes and a new `AI - Video Workflow Index.md`. Dashboard, daily note, and session note now link to the project topic.
+- Latest frontend test result: `Saved row 4; workflow completed. Output folder opened.` followed by `Row 4: Failed - Shopee page did not expose downloadable product media; use an approved seller media/direct file link`. This row used a short `s.shopee.com.my` link and is now treated as unsupported by policy.
+- Raw versus edited analysis on the Electrova sample found a meaningful regression: raw video contains AAC stereo audio, while the edited `_new.mp4` has no audio stream. The current vertical blur composition is too heavy for already-usable square videos.
+- New planning note created: `AI - Video Workflow/AI - Shoppee Video Future Improvements.md`.
+- New implementation plan created: `docs/superpowers/plans/2026-04-23-ai-shoppee-video-v1-future-improvements.md`.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

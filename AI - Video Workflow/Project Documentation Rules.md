@@ -35,6 +35,8 @@ When a conversation creates useful project knowledge, save it into a matching no
 
 - `Rekalab Affiliate Video Workflow Analysis.md`
 - `CapCut Affiliate Video Workflow Plan.md`
+- `AI - Shoppee Video v1.0.md`
+- `AI - Shoppee Video Future Improvements.md`
 - `Project Documentation Rules.md`
 
 ## Working Agreement

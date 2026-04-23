@@ -255,8 +255,53 @@ AI - Shoppee Video v1.0/output/
 - FFmpeg is installed through WinGet and is discovered by the workflow.
 - Live Electrova Shopee product-page test produced a captioned `_new.mp4` at 1080x1920.
 
+## Latest User Test - 2026-04-23
+
+Frontend test result:
+
+```text
+Saved row 4; workflow completed. Output folder opened.
+Row 4: Failed - Shopee page did not expose downloadable product media; use an approved seller media/direct file link
+```
+
+Interpretation:
+
+- The tested row used a short `s.shopee.com.my` link.
+- Short redirect links are now treated as unreliable input and should be ignored for future workflow work.
+- Use full Shopee product URLs or direct approved media links only.
+
+## Raw vs Edited Video Analysis - 2026-04-23
+
+Analyzed files:
+
+```text
+raw:    AI - Shoppee Video v1.0/output/Electrova - Cordless UV Mite-Electrova/raw/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494.mp4
+edited: AI - Shoppee Video v1.0/output/Electrova - Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4
+```
+
+Measured properties:
+
+```text
+raw video:    720x720, 25 fps, video bitrate about 258 kb/s, audio AAC stereo present
+edited video: 1080x1920, 30 fps, video bitrate about 966 kb/s, no audio stream present
+```
+
+Practical finding:
+
+- The current edit path forces square source video into a blurred 9:16 canvas.
+- The output is larger and technically higher bitrate, but not meaningfully sharper because the source itself is low-resolution square video.
+- The current render drops the original audio completely.
+- The caption treatment is too heavy for clips that are already visually usable.
+
+Conclusion:
+
+- Future editing should be lighter by default.
+- If the downloaded raw video is already acceptable, preserve the source audio, avoid aggressive blur framing, and use a minimal caption overlay.
+- Stronger editing should be optional, not the only render path.
+
 ## Next Actions
 
 - Import/open the `.xlsx` masterlist in Google Sheets if a native Google Sheet is required.
-- Continue using full Shopee product URLs or approved seller media links; short `s.shopee.com.my` redirect links may still fail unless they resolve to a product page that exposes mobile SEO media.
+- Continue using full Shopee product URLs or approved seller media links.
+- Ignore short `s.shopee.com.my` links for future workflow work.
 - Run the Desktop workflow shortcut for the next product row and check `Done`.
