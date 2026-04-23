@@ -152,11 +152,20 @@ def normalize_record(record: dict[str, str]) -> dict[str, str]:
 
 def ensure_masterlist_columns(masterlist_path: Path) -> None:
     if not masterlist_path.exists():
-        rows: list[dict[str, str]] = []
+        write_masterlist(masterlist_path, [])
+        return
     else:
         with masterlist_path.open("r", newline="", encoding="utf-8-sig") as handle:
             reader = csv.DictReader(handle)
-            rows = [normalize_record(row) for row in reader]
+            fieldnames = reader.fieldnames or []
+            original_rows = list(reader)
+            rows = [normalize_record(row) for row in original_rows]
+
+    current_rows = []
+    for row in original_rows:
+        current_rows.append({column: (row.get(column) or "").strip() for column in REQUIRED_COLUMNS})
+    if fieldnames == REQUIRED_COLUMNS and current_rows == rows:
+        return
     write_masterlist(masterlist_path, rows)
 
 
