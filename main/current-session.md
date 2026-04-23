@@ -29,9 +29,9 @@
 
 ### Active Context
 - **Current Topic**: Shopee Video affiliate automation with Google Drive/Sheet-style masterlist, approved seller media download, and local FFmpeg-based editing.
-- **Immediate Goals**: Save memory/diary, check workflow tooling updates, run needed upgrades, install or enable FFmpeg/yt-dlp if available, and test the workflow with Shopee product link `https://shopee.com.my/product/32632559/41452031782`. Completed: FFmpeg installed, yt-dlp installed, fallback discovery improved, manual Scheduled Task registered and test-triggered, Shopee link tested.
+- **Immediate Goals**: Save memory/diary, keep `AI - Shoppee Video v1.0` moving, and revise the workflow so full Shopee product URLs can download media when the product media is publicly exposed in mobile SEO HTML. Completed: Shopee product URL cleanup, mobile page media extraction, one-best-video selection, live Electrova workflow test, masterlist success sync.
 - **Recent Progress**: Created and committed `AI - Shoppee Video v1.0` scaffold, `List of Link Shopee VIdeo` CSV/XLSX masterlist, Python processor, PowerShell runner, unit tests, design spec, implementation plan, and Obsidian note.
-- **Next Steps**: Use approved seller media/direct video links for production tests. The provided Shopee page does not expose product media through the local scraper and now fails cleanly with `No downloadable media found`.
+- **Next Steps**: Test the next full Shopee product URL or approved seller media link through the Desktop/frontend workflow. Short `s.shopee.com.my` share links may still need to be replaced with full product URLs.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -45,7 +45,8 @@
 - The live Shopee test verified that Shopee product-page scraping can return only page-shell media; the script now filters those false positives and avoids creating misleading output videos.
 - Latest extension: added `Done` column tracking to the masterlist, synced CSV writes into the `.xlsm`, created local frontend form, and created Desktop shortcuts for running the workflow and opening the frontend.
 - Desktop shortcuts: `C:\Users\Legend\Desktop\AI Shoppee Video - Run Workflow.lnk` and `C:\Users\Legend\Desktop\AI Shoppee Video - Frontend.lnk`.
-- Repeated failures observed for SKL Furniture KAI and Electrova Cordless UV Mite. Root cause confirmed: Shopee product/share pages do not expose downloadable product media through `yt-dlp`, the simple page scanner, or public item API checks. The workflow now records an actionable failure note asking for an approved seller media/direct file link.
+- Repeated failures observed for SKL Furniture KAI and Electrova Cordless UV Mite were re-diagnosed. Root cause refined: `yt-dlp` and Shopee item APIs still fail, but mobile SEO HTML for full Shopee product URLs can expose seller media. The workflow now handles full product URLs like `...-i.297985880.25153849822`, strips tracking query parameters, extracts Shopee CDN media, and downloads one best product video when available.
+- Live Electrova test succeeded on 2026-04-23: output file `AI - Shoppee Video v1.0/output/Electrova Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4`; verified H.264, 1080x1920, 59.633s. The real masterlist row is now `Edited` and `Done = TRUE`.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

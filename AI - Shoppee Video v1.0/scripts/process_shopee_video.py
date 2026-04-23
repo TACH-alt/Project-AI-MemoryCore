@@ -13,13 +13,18 @@ import subprocess
 import sys
 from typing import Iterable
 from urllib.error import HTTPError, URLError
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
+DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0"
+SHOPEE_PAGE_USER_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+    "AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+)
 REQUIRED_COLUMNS = [
     "Date",
     "Product Link",
@@ -82,6 +87,32 @@ def is_direct_media_url(url: str) -> bool:
 def is_shopee_url(url: str) -> bool:
     host = urlparse(url).netloc.lower()
     return host.endswith("shopee.com.my") or host.endswith("s.shopee.com.my")
+
+
+def is_shopee_product_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if not is_shopee_url(url):
+        return False
+    path = parsed.path
+    return bool(re.search(r"-i\.\d+\.\d+/?$", path) or re.search(r"/product/\d+/\d+/?$", path))
+
+
+def strip_query_for_shopee_product_url(url: str) -> str:
+    if not is_shopee_product_url(url):
+        return url
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+
+
+def is_shopee_cdn_media_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    path = unquote(parsed.path).lower()
+    return (
+        host.endswith(".vod.susercontent.com")
+        or host == "mms.vod.susercontent.com"
+        or (host == "down-my.img.susercontent.com" and path.startswith("/file/"))
+    )
 
 
 def no_media_message(url: str) -> str:
@@ -271,13 +302,27 @@ def load_rows(masterlist_path: Path, force: bool = False) -> list[MasterRow]:
     return rows
 
 
-def request_url(url: str):
+def request_headers(url: str) -> dict[str, str]:
+    return {
+        "User-Agent": DEFAULT_USER_AGENT,
+        "Accept": "*/*",
+    }
+
+
+def page_request_headers(url: str) -> dict[str, str]:
+    if is_shopee_url(url):
+        return {
+            "User-Agent": SHOPEE_PAGE_USER_AGENT,
+            "Accept": "text/html,*/*",
+            "Accept-Language": "en-MY,en;q=0.9",
+        }
+    return request_headers(url)
+
+
+def request_url(url: str, headers: dict[str, str] | None = None):
     request = Request(
         url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0",
-            "Accept": "*/*",
-        },
+        headers=headers or request_headers(url),
     )
     return urlopen(request, timeout=45)
 
@@ -333,25 +378,40 @@ def extension_from_content_type(content_type: str) -> str:
     return ".bin"
 
 
-def discover_media_urls(page_url: str) -> list[str]:
-    try:
-        with request_url(page_url) as response:
-            body = response.read().decode("utf-8", errors="replace")
-    except (HTTPError, URLError, TimeoutError) as exc:
-        raise RuntimeError(f"Page fetch failed: {exc}") from exc
-
+def extract_media_urls_from_html(page_url: str, body: str) -> list[str]:
     body = html.unescape(body)
     found = set()
     patterns = [
-        r'https?://[^"\'<>\\ ]+\.(?:mp4|mov|m4v|webm|jpg|jpeg|png|webp)(?:\?[^"\'<>\\ ]*)?',
+        r'https?://[^"\'<>\\\s),]+\.(?:mp4|mov|m4v|webm|jpg|jpeg|png|webp)(?:\?[^"\'<>\\\s),]*)?',
         r'(?:src|href|content)=["\']([^"\']+\.(?:mp4|mov|m4v|webm|jpg|jpeg|png|webp)(?:\?[^"\']*)?)["\']',
     ]
+    if is_shopee_url(page_url):
+        patterns.extend(
+            [
+                r'https?://down-my\.img\.susercontent\.com/file/[^"\'<>\\\s),]+',
+                r'https?://(?:down-[a-z-]+|mms)\.vod\.susercontent\.com/[^"\'<>\\\s),]+\.mp4(?:\?[^"\'<>\\\s),]*)?',
+            ]
+        )
     for pattern in patterns:
         for match in re.finditer(pattern, body, flags=re.IGNORECASE):
             url = match.group(1) if match.lastindex else match.group(0)
             found.add(urljoin(page_url, url))
 
+    if is_shopee_url(page_url):
+        found = {url for url in found if is_shopee_cdn_media_url(url)}
+
     return filter_media_urls(found)
+
+
+def discover_media_urls(page_url: str) -> list[str]:
+    page_url = strip_query_for_shopee_product_url(page_url)
+    try:
+        with request_url(page_url, page_request_headers(page_url)) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise RuntimeError(f"Page fetch failed: {exc}") from exc
+
+    return extract_media_urls_from_html(page_url, body)
 
 
 def media_priority(url: str) -> tuple[int, str]:
@@ -359,8 +419,25 @@ def media_priority(url: str) -> tuple[int, str]:
     return (0 if suffix in VIDEO_EXTENSIONS else 1, url)
 
 
+def video_quality_score(url: str) -> int:
+    scores = [int(value) for value in re.findall(r"\.(\d{6,})\.mp4(?:\?|$)", url, flags=re.IGNORECASE)]
+    return max(scores) if scores else 0
+
+
+def select_media_urls_for_download(media_urls: list[str]) -> list[str]:
+    video_urls = [
+        url for url in media_urls
+        if Path(unquote(urlparse(url).path)).suffix.lower() in VIDEO_EXTENSIONS
+    ]
+    if video_urls:
+        return [max(video_urls, key=video_quality_score)]
+    return media_urls[:5]
+
+
 def is_site_chrome_media_url(url: str) -> bool:
+    parsed = urlparse(url)
     name = Path(unquote(urlparse(url).path)).name.lower()
+    path = unquote(parsed.path).lower()
     return (
         "favicon" in name
         or "splash" in name
@@ -371,6 +448,8 @@ def is_site_chrome_media_url(url: str) -> bool:
         or name.startswith("logo")
         or "sprite" in name
         or "placeholder" in name
+        or "shopee-mobilemall-live-sg/productdetailspage/" in path
+        or "shopee-pcmall-live-sg/productdetailspage/" in path
     )
 
 
@@ -415,7 +494,7 @@ def collect_media(row: MasterRow, raw_dir: Path) -> list[Path]:
         return []
 
     downloaded = []
-    for index, media_url in enumerate(media_urls[:5], start=1):
+    for index, media_url in enumerate(select_media_urls_for_download(media_urls), start=1):
         try:
             downloaded.append(download_url(media_url, raw_dir, fallback_name=f"row-{row.row_number}-{index}"))
         except RuntimeError:

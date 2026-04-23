@@ -119,9 +119,75 @@ Fixes made during testing:
 Current conclusion:
 
 - The workflow is working for control flow, status updates, dependency discovery, logging, and safe failure handling.
-- The supplied Shopee product page does not expose downloadable approved seller media to this local scraper.
-- For production use, add approved seller media/direct video links in `Product Link` whenever possible.
-- Repeated failures for SKL Furniture KAI and Electrova Cordless UV Mite were diagnosed on 2026-04-23: Shopee product/share URLs do not expose downloadable product media through `yt-dlp`, the page scanner, or Shopee item API checks. The masterlist now records the clearer note `Shopee page did not expose downloadable product media; use an approved seller media/direct file link`.
+- Initial desktop Shopee scraping failed because Shopee served an app shell with no product media.
+- Approved seller media/direct video links remain the most reliable input.
+- Shopee product-page extraction is now supported when the mobile SEO HTML exposes product media.
+
+## Shopee Product Page Extractor Fix - 2026-04-23
+
+### Root Cause
+
+- `yt-dlp` still reports Shopee product URLs as unsupported.
+- Shopee API endpoints still return anti-crawler-style `403` responses.
+- Desktop/browser-shell HTML for links with `extraParams` did not include product media.
+- A mobile browser-style request to the clean product URL returned SEO/product HTML containing seller media URLs.
+
+### Code Changes
+
+- Added Shopee product URL recognition for both:
+  - `https://shopee.com.my/product/<shopid>/<itemid>`
+  - `https://shopee.com.my/<slug>-i.<shopid>.<itemid>`
+- Added query stripping for Shopee product links before page scraping.
+- Added mobile browser request headers for Shopee page discovery.
+- Added Shopee CDN extraction for:
+  - seller video URLs from `*.vod.susercontent.com`
+  - seller image URLs from `down-my.img.susercontent.com/file/...`
+- Filtered out Shopee page chrome assets from the mobile product page.
+- Limited workflow download selection to one best video when product videos are available.
+
+### Markdown Files Updated For This Fix
+
+- `AI - Video Workflow/AI - Shoppee Video v1.0.md`
+- `docs/superpowers/plans/2026-04-23-ai-shoppee-video-v1-implementation.md`
+- `daily-diary/current/2026-04-23.md`
+- `main/current-session.md`
+- `main/main-memory.md`
+
+### Live Test Result
+
+Test link:
+
+```text
+https://shopee.com.my/Electrova-Cordless-UV-Mite-Remover-Vacuum-Cleaner-VacLife-Series-i.297985880.25153849822?extraParams=%7B%22display_model_id%22%3A250102961680%7D
+```
+
+Result:
+
+```text
+Downloaded 1 media file(s); edited 1 video file(s)
+```
+
+Output:
+
+```text
+AI - Shoppee Video v1.0/output/Electrova Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4
+```
+
+Verified video:
+
+```text
+codec=h264
+resolution=1080x1920
+duration=59.633008s
+size=7,225,434 bytes
+```
+
+Masterlist status:
+
+```text
+Status=Edited
+Done=TRUE
+```
 
 ## Local Frontend And Manual Shortcuts
 
@@ -165,13 +231,13 @@ AI - Shoppee Video v1.0/output/
 
 ## Verification
 
-- Unit tests pass with `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v` when run outside the sandbox.
+- Unit tests pass with `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v`.
 - Manual runner dry-run passes with `powershell -ExecutionPolicy Bypass -File '.\AI - Shoppee Video v1.0\scripts\run_shopee_video_workflow.ps1' -DryRun`.
-- FFmpeg is not currently on PATH, so edited `_new.mp4` rendering will require installing FFmpeg or adding it to PATH.
+- FFmpeg is installed through WinGet and is discovered by the workflow.
+- Live Electrova Shopee product-page test produced a captioned `_new.mp4` at 1080x1920.
 
 ## Next Actions
 
-- Copy or merge the worktree output back to the main workspace.
 - Import/open the `.xlsx` masterlist in Google Sheets if a native Google Sheet is required.
-- Install FFmpeg for video rendering.
-- Add a real approved seller media link row and run a first live test.
+- Continue using full Shopee product URLs or approved seller media links; short `s.shopee.com.my` redirect links may still fail unless they resolve to a product page that exposes mobile SEO media.
+- Run the Desktop workflow shortcut for the next product row and check `Done`.

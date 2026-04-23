@@ -365,4 +365,30 @@ Expected: commit succeeds.
 - [x] Masterlist CSV and workbook contain the required columns.
 - [x] Obsidian note links to every project `.md` created or updated in this work.
 - [x] Memory files mention the new documentation rule and current project status.
+- [x] Shopee full product URL extractor is tested for query cleanup, mobile page headers, Shopee CDN media extraction, and one-best-video selection.
+- [x] Live Electrova product URL test produced a captioned `1080x1920` `_new.mp4` and updated the masterlist row to `Edited` / `Done = TRUE`.
+
+## Follow-Up Fix - Shopee Product URL Extraction
+
+**Date:** 2026-04-23
+
+Root cause refinement:
+
+- Desktop Shopee HTML and Shopee item APIs can fail or omit product media.
+- Mobile browser-style Shopee product HTML can expose seller media URLs in SEO/product data.
+
+Implemented:
+
+- Shopee product URL parser for `/product/<shopid>/<itemid>` and slug `-i.<shopid>.<itemid>` links.
+- Query stripping for Shopee product URLs before scraping.
+- Mobile browser request headers for Shopee page discovery.
+- Shopee CDN extraction for `*.vod.susercontent.com` MP4 files and `down-my.img.susercontent.com/file/...` images.
+- Shopee UI asset filtering.
+- One-best-video selection to avoid duplicate renders from multiple quality variants.
+
+Verified output:
+
+```text
+AI - Shoppee Video v1.0/output/Electrova Cordless UV Mite-Electrova/edited/my-11110105-6ke18-lqbrwqqiae664d.16003251736514494_new.mp4
+```
 

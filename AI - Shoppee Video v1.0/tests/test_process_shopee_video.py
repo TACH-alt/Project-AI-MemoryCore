@@ -13,11 +13,15 @@ from process_shopee_video import (
     build_product_folder_name,
     derive_output_name,
     ensure_masterlist_columns,
+    extract_media_urls_from_html,
     filter_media_urls,
     find_executable,
     is_direct_media_url,
     load_rows,
+    page_request_headers,
     safe_filename,
+    select_media_urls_for_download,
+    strip_query_for_shopee_product_url,
     update_record,
 )
 
@@ -99,11 +103,56 @@ class HelperTests(unittest.TestCase):
                 "https://example.com/icon_favicon_1_32.png",
                 "https://example.com/ios_icon_180x180.png",
                 "https://example.com/ios_splash_screen_1080x2340.png",
+                "https://deo.shopeemobile.com/shopee/shopee-mobilemall-live-sg/productdetailspage/share.png",
                 "https://example.com/logo.png",
                 "https://example.com/product-demo.mp4",
             ]
         )
         self.assertEqual(urls, ["https://example.com/product-demo.mp4"])
+
+    def test_shopee_product_url_query_is_removed_before_scraping(self):
+        cleaned = strip_query_for_shopee_product_url(
+            "https://shopee.com.my/Electrova-Cordless-UV-Mite-Remover-i.297985880.25153849822"
+            "?extraParams=%7B%22display_model_id%22%3A250102961680%7D"
+        )
+        self.assertEqual(
+            cleaned,
+            "https://shopee.com.my/Electrova-Cordless-UV-Mite-Remover-i.297985880.25153849822",
+        )
+
+    def test_page_request_headers_use_mobile_browser_for_shopee_pages(self):
+        headers = page_request_headers("https://shopee.com.my/product/297985880/25153849822")
+        self.assertIn("iPhone", headers["User-Agent"])
+        self.assertIn("en-MY", headers["Accept-Language"])
+
+    def test_extract_media_urls_from_shopee_seo_html_prefers_product_media(self):
+        html = """
+        <meta property="og:image" content="https://down-my.img.susercontent.com/file/my-11134207-demo@resize_w1200_nl.webp">
+        <script>{"video_info_list":[{"formats":[{"url":"https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4"}]}]}</script>
+        <img src="https://deo.shopeemobile.com/shopee/shopee-mobilemall-live-sg/assets/icon_favicon_1_32.png">
+        <style>.share{background-image:url(https://deo.shopeemobile.com/shopee/shopee-mobilemall-live-sg/productdetailspage/share.png)}</style>
+        """
+        urls = extract_media_urls_from_html("https://shopee.com.my/product/297985880/25153849822", html)
+        self.assertEqual(
+            urls,
+            [
+                "https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4",
+                "https://down-my.img.susercontent.com/file/my-11134207-demo@resize_w1200_nl.webp",
+            ],
+        )
+
+    def test_select_media_urls_downloads_single_best_video_when_available(self):
+        urls = select_media_urls_for_download(
+            [
+                "https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600318.mp4",
+                "https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4",
+                "https://down-my.img.susercontent.com/file/my-11134207-demo@resize_w1200_nl.webp",
+            ]
+        )
+        self.assertEqual(
+            urls,
+            ["https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4"],
+        )
 
     def test_ffmpeg_command_uses_complex_filter_for_composited_canvas(self):
         command = build_ffmpeg_command(
