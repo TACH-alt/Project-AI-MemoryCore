@@ -45,6 +45,7 @@
 - The live Shopee test verified that Shopee product-page scraping can return only page-shell media; the script now filters those false positives and avoids creating misleading output videos.
 - Latest extension: added `Done` column tracking to the masterlist, synced CSV writes into the `.xlsm`, created local frontend form, and created Desktop shortcuts for running the workflow and opening the frontend.
 - Desktop shortcuts: `C:\Users\Legend\Desktop\AI Shoppee Video - Run Workflow.lnk` and `C:\Users\Legend\Desktop\AI Shoppee Video - Frontend.lnk`.
+- Repeated failures observed for SKL Furniture KAI and Electrova Cordless UV Mite. Root cause confirmed: Shopee product/share pages do not expose downloadable product media through `yt-dlp`, the simple page scanner, or public item API checks. The workflow now records an actionable failure note asking for an approved seller media/direct file link.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

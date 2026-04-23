@@ -79,6 +79,17 @@ def is_direct_media_url(url: str) -> bool:
     return parsed.scheme in {"http", "https"} and suffix in MEDIA_EXTENSIONS
 
 
+def is_shopee_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower()
+    return host.endswith("shopee.com.my") or host.endswith("s.shopee.com.my")
+
+
+def no_media_message(url: str) -> str:
+    if is_shopee_url(url):
+        return "Shopee page did not expose downloadable product media; use an approved seller media/direct file link"
+    return "No downloadable media found"
+
+
 def is_pending_status(status: str, force: bool = False) -> bool:
     return force or status.strip().lower() in {"", "pending"}
 
@@ -539,7 +550,7 @@ def process_pending_rows(config: WorkflowConfig) -> int:
         try:
             raw_files = collect_media(row, raw_dir)
             if not raw_files:
-                raise RuntimeError("No downloadable media found")
+                raise RuntimeError(no_media_message(row.product_link))
             caption = build_caption(row.product_name, row.shop_name)
             edited_files = []
             for raw_file in raw_files:

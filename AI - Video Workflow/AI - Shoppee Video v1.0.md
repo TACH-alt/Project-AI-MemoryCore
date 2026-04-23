@@ -121,6 +121,7 @@ Current conclusion:
 - The workflow is working for control flow, status updates, dependency discovery, logging, and safe failure handling.
 - The supplied Shopee product page does not expose downloadable approved seller media to this local scraper.
 - For production use, add approved seller media/direct video links in `Product Link` whenever possible.
+- Repeated failures for SKL Furniture KAI and Electrova Cordless UV Mite were diagnosed on 2026-04-23: Shopee product/share URLs do not expose downloadable product media through `yt-dlp`, the page scanner, or Shopee item API checks. The masterlist now records the clearer note `Shopee page did not expose downloadable product media; use an approved seller media/direct file link`.
 
 ## Local Frontend And Manual Shortcuts
 

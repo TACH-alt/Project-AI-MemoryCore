@@ -186,6 +186,14 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(sheet.cell(1, 7).value, "Done")
             self.assertEqual(sheet.cell(2, 7).value, "TRUE")
 
+    def test_no_media_message_is_actionable_for_shopee_pages(self):
+        from process_shopee_video import no_media_message
+
+        self.assertEqual(
+            no_media_message("https://shopee.com.my/product/32632559/41452031782"),
+            "Shopee page did not expose downloadable product media; use an approved seller media/direct file link",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
