@@ -346,3 +346,30 @@ Conclusion:
 - Ignore short `s.shopee.com.my` links for future workflow work.
 - Task 1 is complete: LAN/private-network frontend access.
 - Next task candidate: lighter renderer with audio preservation.
+
+## Planning Expansion - 2026-04-26
+
+Project planning was extended with a second workflow lane:
+
+```text
+AI - Video Workflow/Shopee Link and Media Analysis Workflow.md
+```
+
+This new planning direction adds:
+
+- shared-link analysis
+- downloaded-media analysis
+- multi-angle hook generation
+- clip-order and timestamp suggestions
+- CapCut/editor handoff artifacts
+
+Current recommended first slice:
+
+```text
+Add an Analyze workflow that writes product-summary.md, media-analysis.md, and hook-pack.md into each product folder after successful download.
+```
+
+Current note:
+
+- This save point records planning only.
+- No new implementation work has been started in this documentation update.
