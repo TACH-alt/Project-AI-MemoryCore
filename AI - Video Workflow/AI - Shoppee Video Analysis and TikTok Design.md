@@ -31,6 +31,12 @@ Main spec:
 docs/superpowers/specs/2026-04-27-ai-shoppee-video-analysis-and-tiktok-design.md
 ```
 
+Implementation plan:
+
+```text
+docs/superpowers/plans/2026-04-27-ai-shoppee-video-analysis-and-tiktok-implementation.md
+```
+
 ## Key Approved Rules
 
 - `Record ID` is the first masterlist column.
@@ -47,4 +53,5 @@ docs/superpowers/specs/2026-04-27-ai-shoppee-video-analysis-and-tiktok-design.md
 
 - Design approved by user.
 - Spec written.
-- Implementation has not started yet in this note.
+- Implementation plan written.
+- Code execution has not started yet in this note.
