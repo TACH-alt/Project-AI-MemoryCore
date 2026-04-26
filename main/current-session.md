@@ -10,7 +10,7 @@
 **Session Type**: Work (system setup)
 **Current Project**: AI - Shoppee Video v1.0 automation
 **Status**: Active
-**Time**: 2026-04-26
+**Time**: 2026-04-27
 
 ## Time-Aware Session Context
 *Populated at session start via Time Intelligence protocol (see main/main-memory.md)*
@@ -20,18 +20,18 @@
 - **Behavior Focus**: Save point / project continuity
 
 ## Current Focus
-- **Primary Task**: Building the AI - Shoppee Video v1.0 local automation system
+- **Primary Task**: Finalizing and saving the AI - Shoppee Video v1.0 analysis and TikTok upgrade state
 - **Technical Context**: Windows PC, Cowork mode, files under C:\Users\Legend\Documents\Claude\Projects\MemoryCore
-- **Progress**: Project design, implementation plan, local scaffold, masterlist workbook/CSV, processor script, runner, tests, and Obsidian project note have been created.
+- **Progress**: The analysis lane and public TikTok support are implemented in an isolated worktree branch, verified, and documented for follow-up review.
 
 ## Working Memory (RAM)
 *Temporary storage - cleared when session ends or when 500-line limit is reached*
 
 ### Active Context
-- **Current Topic**: Shopee Video affiliate automation with Google Drive/Sheet-style masterlist, approved seller media download, and local FFmpeg-based editing.
-- **Immediate Goals**: Save the latest conversation state and planning updates before continuing the next Shopee workflow improvement.
-- **Recent Progress**: Added the planning note `AI - Video Workflow/Shopee Link and Media Analysis Workflow.md` to define the next workflow layer: link analysis, media analysis, hook generation, and CapCut handoff preparation.
-- **Next Steps**: Preserve this save point across MemoryCore and Obsidian first, then continue with the analysis-workflow implementation planning when requested.
+- **Current Topic**: Shopee + TikTok affiliate automation with stable row identity, product-folder documentation, manual/direct analysis actions, and Obsidian-backed project memory.
+- **Immediate Goals**: Save the latest implementation checkpoint into MemoryCore and the Legendary vault before Claude reviews or improves the work.
+- **Recent Progress**: Completed the isolated worktree implementation branch `codex/analysis-tiktok`, including row-targeted frontend analyze actions, public TikTok single-video support, and refreshed project documentation.
+- **Next Steps**: Keep this checkpoint saved, let Claude review/improve if needed, then decide how to merge the worktree branch back into the main project.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -56,16 +56,20 @@
 - Task 1 of the future-improvements plan is now complete on 2026-04-24. The frontend supports private-network access via `-Lan`, prints both localhost and LAN URLs, and manual verification showed `http://10.10.10.5:8766/` as the LAN address during testing.
 - New workflow-planning note created on 2026-04-24: `AI - Video Workflow/Shopee Link and Media Analysis Workflow.md`.
 - The new note defines a second workflow lane for `Analyze`, `Open Analysis`, and `Open Handoff`, with outputs such as `product-summary.md`, `media-analysis.md`, and `hook-pack.md`.
-- As of 2026-04-26, the immediate request is to save this conversation and the project update first before any new implementation work begins.
+- As of 2026-04-27, the analysis and TikTok upgrade is implemented in the isolated worktree branch `codex/analysis-tiktok`.
+- That branch added `Record ID`, `Analysis Done`, `product-info.md`, `analysis-result.md`, row-targeted frontend actions, and public TikTok single-video URL support.
+- Latest verification inside the worktree: `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v` -> `46 tests passed`.
+- The current checkpoint is intentionally separated from Claude's main-workspace frontend/render changes.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*
 - **Previous Session Summary**: MemoryCore was personalized for Legend, Tier 1-4 features are recorded as installed in `master-memory.md`, and the stale Tier 1-only session state was corrected.
 - **Where We Left Off**: `AI - Shoppee Video v1.0` local automation was created and committed. The main workspace now contains the scaffold, masterlist CSV/XLSX, Python processor, PowerShell runner, tests, design spec, implementation plan, and Obsidian project note.
-- **Where We Left Off**: The next-improvement planning note for link and media analysis has been added and mirrored to Obsidian; the next coding phase has not started yet in this save point.
+- **Where We Left Off**: The analysis and TikTok implementation is complete in the isolated worktree branch and has been documented and mirrored to Obsidian.
 - **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.
+- **Review Rule**: Do not overwrite Claude's in-progress main-workspace code; use the isolated worktree branch as the safe implementation checkpoint.
 
 ## Session Achievements
 - Repo cloned successfully via user-run PowerShell (git path resolution handled).

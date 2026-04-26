@@ -2,7 +2,7 @@
 
 **Project**: AI - Shoppee Video v1.0  
 **Date**: 2026-04-27  
-**Status**: Design approved and spec written  
+**Status**: Implemented in isolated worktree branch `codex/analysis-tiktok`  
 
 ## Summary
 
@@ -49,9 +49,61 @@ docs/superpowers/plans/2026-04-27-ai-shoppee-video-analysis-and-tiktok-implement
 - `product-info.md` must be refreshed from saved row data and media counts.
 - `analysis-result.md` is the analysis completion artifact.
 
+## Implementation Result - 2026-04-27
+
+- Added `Record ID` as the first masterlist column with platform-specific prefixes:
+  - Shopee: `ASV-0000001`
+  - TikTok: `ATV-0000001`
+- Added `Analysis Done` tracking to the CSV and workbook sync path.
+- Changed product output grouping to:
+
+```text
+output/
+  Shopee|TikTok/
+    <Shop Name>/
+      <Product Name>/
+```
+
+- Added `product-info.md` creation and refresh on save.
+- Added `analysis-result.md` creation for successful analysis runs.
+- Added CLI support for:
+  - `--analyze-record-id`
+  - `--download-and-analyze-record-id`
+- Updated the frontend so rows can be targeted by `Record ID`, including:
+  - visible `Record ID` field
+  - row `Load`
+  - row `Analyze`
+  - row `Open`
+  - selected-row `Analyze`
+  - `Save + Download + Analyze`
+- Added public TikTok single-video URL support in the existing downloader path.
+- Added a clear failure message for unsupported TikTok shapes:
+  - `TikTok link must be a public single video URL`
+
+## Verification
+
+Verified in the isolated worktree:
+
+```text
+C:\Users\Legend\Documents\Claude\Projects\MemoryCore\.worktrees\codex-analysis-tiktok
+```
+
+Command:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+46 tests passed
+```
+
 ## Current State
 
 - Design approved by user.
 - Spec written.
 - Implementation plan written.
-- Code execution has not started yet in this note.
+- Core implementation completed in the isolated worktree branch.
+- Main workspace remains untouched for Claude's in-progress changes.

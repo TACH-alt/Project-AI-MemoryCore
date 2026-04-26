@@ -30,6 +30,7 @@ List of Link Shopee VIdeo
 Columns:
 
 ```text
+Record ID
 Date
 Product Link
 Product Name
@@ -37,6 +38,7 @@ Shop Name
 Source Type
 Status
 Done
+Analysis Done
 Notes
 Last Processed At
 Output Folder
@@ -373,3 +375,54 @@ Current note:
 
 - This save point records planning only.
 - No new implementation work has been started in this documentation update.
+
+## Analysis And TikTok Upgrade - 2026-04-27
+
+Implemented in isolated worktree branch:
+
+```text
+codex/analysis-tiktok
+```
+
+What landed:
+
+- Added stable `Record ID` handling with:
+  - `ASV-0000001` for Shopee rows
+  - `ATV-0000001` for TikTok rows
+- Added `Analysis Done` tracking to the masterlist CSV and workbook sync path.
+- Changed output folders to:
+
+```text
+output/
+  Shopee|TikTok/
+    <Shop Name>/
+      <Product Name>/
+```
+
+- Added `product-info.md` creation/update on save.
+- Added `analysis/analysis-result.md` creation on successful analysis.
+- Added direct CLI and frontend support for:
+  - `Analyze`
+  - `Save + Download + Analyze`
+- Updated the frontend to work from saved rows by `Record ID`, with row actions for:
+  - `Load`
+  - `Analyze`
+  - `Open`
+- Added public TikTok single-video URL support.
+- Added clear rejection text for unsupported TikTok links:
+
+```text
+TikTok link must be a public single video URL
+```
+
+Verification:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+46 tests passed
+```

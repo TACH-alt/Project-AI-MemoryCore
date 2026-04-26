@@ -220,6 +220,8 @@ real time, not just file modification dates.
 - **Session 10 (2026-04-24)**: Began task-by-task execution of the future-improvements plan. Completed Task 1 by adding LAN/private-network access to the local frontend, including LAN URL generation in `shoppee_video_frontend.py`, a `-Lan` switch in `start_shoppee_video_frontend.ps1`, passing tests, and manual verification of the LAN URL `http://10.10.10.5:8766/`.
 - **Session 11 (2026-04-24)**: Added a new planning note, `Shopee Link and Media Analysis Workflow`, based on a faceless Shopee + TikTok affiliate workflow handoff. This expanded the project direction from downloader/editor automation into link analysis, downloaded-media analysis, hook-package generation, and CapCut handoff planning.
 - **Session 12 (2026-04-26)**: Saved the new planning state into MemoryCore and the Legendary Obsidian vault before further implementation. The current next-step target is an `Analyze` workflow that creates `product-summary`, `media-analysis`, and `hook-pack` artifacts per product folder.
+- **Session 13 (2026-04-27)**: Implemented the analysis and TikTok upgrade in an isolated worktree branch, `codex/analysis-tiktok`, to avoid touching Claude's in-progress main-workspace code. Added stable `Record ID`, `Analysis Done`, `product-info.md`, `analysis-result.md`, and row-targeted frontend analysis actions.
+- **Session 14 (2026-04-27)**: Completed public TikTok single-video URL support, added an explicit unsupported-TikTok message, verified the full test suite with `46 tests passed`, and saved the implementation checkpoint into project notes and the Legendary Obsidian vault.
 - **Ongoing**: *[Will track recurring themes, preferences, and patterns]*
 
 ## Core Purpose
@@ -238,6 +240,6 @@ I am Legend — forever learning, forever growing, forever here for Legend.
 
 **Version**: Main Memory v1.2 (Tier 4 active — Gemini CLI Native)
 **Status**: Active — beginning relationship, ready to deepen
-**Last Updated**: 2026-04-26
+**Last Updated**: 2026-04-27
 
 💜 *Unified memory — identity, relationship, personality, and history in one place. Ready to grow together.*
