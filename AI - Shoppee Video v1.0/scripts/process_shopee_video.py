@@ -237,7 +237,10 @@ def no_media_message(url: str) -> str:
     if is_shopee_url(url):
         return "Shopee page did not expose downloadable product media; use an approved seller media/direct file link"
     if is_tiktok_video_url(url):
-        return "TikTok video could not be downloaded; ensure the URL is a public single-video link"
+        return (
+            "TikTok video could not be downloaded; ensure the URL is a public single-video post link. "
+            "Photo-mode (carousel) posts normally fall back to the cover thumbnail with background audio."
+        )
     return "No downloadable media found"
 
 
@@ -644,6 +647,9 @@ def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
         return media
     if is_tiktok_video_url(canonical_url):
         thumbnails = download_tiktok_thumbnail_with_ytdlp(canonical_url, raw_dir)
+        if thumbnails:
+            # Photo-mode post detected: attempt to grab background audio for the render.
+            download_tiktok_photo_audio(canonical_url, raw_dir)
         cleanup_non_media_outputs(raw_dir)
         return thumbnails
     cleanup_non_media_outputs(raw_dir)
@@ -651,13 +657,15 @@ def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
 
 
 def cleanup_non_media_outputs(directory: Path) -> list[Path]:
+    """Remove yt-dlp scratch files from directory, preserving media and background audio."""
+    _KEEP_NAMES = {"background.aac"}
     removed: list[Path] = []
     if not directory.exists():
         return removed
     for path in directory.iterdir():
         if path.is_dir():
             continue
-        if path.suffix.lower() in MEDIA_EXTENSIONS:
+        if path.suffix.lower() in MEDIA_EXTENSIONS or path.name in _KEEP_NAMES:
             continue
         path.unlink(missing_ok=True)
         removed.append(path)
@@ -713,6 +721,34 @@ def download_tiktok_thumbnail_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
     return images
 
 
+def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:
+    """Download the background audio track from a TikTok photo-mode (carousel) post.
+
+    Saves the audio as ``background.aac`` inside *raw_dir*.
+    Returns the path on success, or ``None`` if unavailable or if yt-dlp fails.
+    Photo-mode posts have no downloadable video stream but always carry a music track;
+    the audio file is later picked up by ``render_video`` and merged into the rendered output.
+    """
+    target = raw_dir / "background.aac"
+    target.unlink(missing_ok=True)
+    command = [
+        *build_ytdlp_prefix(),
+        "--no-playlist",
+        "--format", "ba",
+        "-x",
+        "--audio-format", "aac",
+        "--audio-quality", "0",
+        "--paths", str(raw_dir),
+        "--output", "background.%(ext)s",
+        url,
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode == 0 and target.exists() and target.stat().st_size > 0:
+        return target
+    target.unlink(missing_ok=True)
+    return None
+
+
 def copy_local_media(source: Path, target_dir: Path) -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = unique_path(target_dir, source.name)
@@ -756,6 +792,7 @@ def build_ffmpeg_command(
     output_path: Path,
     caption: str,
     render_mode: str = "auto",
+    background_audio: Path | None = None,
 ) -> list[str]:
     """Build an FFmpeg command for rendering a product video.
 
@@ -772,10 +809,15 @@ def build_ffmpeg_command(
     text = escape_drawtext(caption)
 
     if is_image:
-        # Image source: loop for 8 s, blur canvas, no source audio
-        input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
+        # Image source: loop for 8 s, vertical-blur canvas.
+        # Photo-mode TikTok posts: include background audio when available.
+        if background_audio and background_audio.exists():
+            input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path), "-i", str(background_audio)]
+            has_audio = True
+        else:
+            input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
+            has_audio = False
         duration_args: list[str] = ["-shortest"]
-        has_audio = False
         filter_graph = (
             "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
             "crop=1080:1920,boxblur=20:1[bg];"
@@ -813,7 +855,14 @@ def build_ffmpeg_command(
                 "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28[v]"
             )
 
-    audio_map = ["-map", "0:a?", "-c:a", "aac"] if has_audio else []
+    if is_image and background_audio and background_audio.exists():
+        # Photo-mode: audio comes from the second input (background.aac)
+        audio_map = ["-map", "1:a", "-c:a", "aac"]
+    elif has_audio:
+        # Video source: map optional audio from the single input
+        audio_map = ["-map", "0:a?", "-c:a", "aac"]
+    else:
+        audio_map = []
 
     return [
         ffmpeg,
@@ -840,13 +889,20 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: st
     edited_dir.mkdir(parents=True, exist_ok=True)
     if raw_path.suffix.lower() in VIDEO_EXTENSIONS:
         output_name = derive_output_name(raw_path)
+        background_audio = None
     elif raw_path.suffix.lower() in IMAGE_EXTENSIONS:
         output_name = f"{safe_filename(raw_path.stem)}_new.mp4"
+        # Photo-mode TikTok: look for background audio saved alongside the thumbnail
+        _audio_candidate = raw_path.parent / "background.aac"
+        background_audio = _audio_candidate if _audio_candidate.exists() else None
     else:
         return None
 
     output_path = unique_path(edited_dir, output_name)
-    command = build_ffmpeg_command(ffmpeg, raw_path, output_path, caption, render_mode=render_mode)
+    command = build_ffmpeg_command(
+        ffmpeg, raw_path, output_path, caption,
+        render_mode=render_mode, background_audio=background_audio,
+    )
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {raw_path.name}: {result.stderr.strip()[-500:]}")
@@ -1111,6 +1167,13 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             raw_files = collect_media(row, raw_dir)
             if not raw_files:
                 raise RuntimeError(no_media_message(row.product_link))
+
+            # Detect TikTok photo-mode: yt-dlp returned images rather than video
+            photo_mode = (
+                is_tiktok_video_url(row.product_link)
+                and all(f.suffix.lower() in IMAGE_EXTENSIONS for f in raw_files)
+            )
+
             caption = build_caption(row.product_name, row.shop_name)
             edited_files = []
             for raw_file in raw_files:
@@ -1118,7 +1181,8 @@ def process_pending_rows(config: WorkflowConfig) -> int:
                 if rendered:
                     edited_files.append(rendered)
             if edited_files:
-                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
+                photo_note = " (photo-mode post — cover thumbnail rendered with background audio)" if photo_mode else ""
+                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s){photo_note}"
                 update_record(record, "Edited", message, product_folder, edited_files)
                 append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
             else:

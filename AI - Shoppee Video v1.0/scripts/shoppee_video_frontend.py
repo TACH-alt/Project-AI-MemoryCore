@@ -181,8 +181,11 @@ HTML = """<!doctype html>
         </label>
       </div>
       <div class="grid2" style="margin-top:11px">
-        <label class="wide">Product Link <span class="hint">Full Shopee URL or direct media link — avoid short s.shopee.com.my links</span>
-          <input id="fLink" type="url" required placeholder="https://shopee.com.my/Product-Name-i.xxx.xxxxxxx">
+        <label class="wide">Product Link <span class="hint">Full Shopee/TikTok URL or direct media link — avoid short s.shopee.com.my links</span>
+          <input id="fLink" type="url" required placeholder="https://shopee.com.my/Product-Name-i.xxx.xxxxxxx or https://vt.tiktok.com/…">
+          <span id="tiktokHint" style="display:none;font-size:11px;color:#7c3aed;font-weight:600;margin-top:3px;line-height:1.4">
+            📸 TikTok photo-mode (carousel) posts have no downloadable video — the workflow will render the cover thumbnail with background audio instead. For best affiliate results, use a standard TikTok video post URL.
+          </span>
         </label>
         <label>Product Name <input id="fName" required placeholder="e.g. Electrova Cordless UV Mite"></label>
         <label>Shop Name    <input id="fShop" required placeholder="e.g. Electrova"></label>
@@ -451,6 +454,18 @@ HTML = """<!doctype html>
     document.getElementById("fDate").valueAsDate = new Date();
     refresh();
     setInterval(refresh, 20000);
+
+    // TikTok photo-mode hint — show when a TikTok URL is typed/pasted
+    (function() {
+      const linkInput = document.getElementById("fLink");
+      const hint = document.getElementById("tiktokHint");
+      function updateTikTokHint() {
+        const val = linkInput.value.toLowerCase();
+        hint.style.display = (val.includes("tiktok.com")) ? "block" : "none";
+      }
+      linkInput.addEventListener("input", updateTikTokHint);
+      linkInput.addEventListener("change", updateTikTokHint);
+    })();
   </script>
 </body>
 </html>
