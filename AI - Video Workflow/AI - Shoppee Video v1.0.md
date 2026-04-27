@@ -497,3 +497,36 @@ Result:
 - One small runtime warning still appeared after success:
   - a `zipfile.ZipFile.__del__` cleanup warning on Python 3.14
   - workflow result still completed successfully
+
+## TikTok Audio Fix - 2026-04-27
+
+- Picked up after Claude hit the limit while enhancing TikTok photo-mode audio.
+- Verified the root cause:
+  - `yt-dlp -F https://vt.tiktok.com/ZS9hjGD43/` exposed only one `audio` format
+  - `download_tiktok_photo_audio()` was asking `yt-dlp` to extract/convert to `background.aac`
+  - `yt-dlp` downloaded the track but failed post-processing because its internal `ffmpeg` / `ffprobe` lookup could not find those tools on PATH
+  - the usable file left behind was `background.m4a`, which the workflow then ignored and cleaned up
+- Fixed in code by:
+  - introducing `AUDIO_EXTENSIONS`
+  - preserving `background.<ext>` audio files during cleanup
+  - downloading TikTok photo-mode audio as native `bestaudio` instead of forcing AAC extraction
+  - teaching the renderer to detect any `background.*` supported audio file, not only `background.aac`
+- Verification:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+33 tests passed
+```
+
+- Live retest:
+  - reran `ATV-0000001` with `--download-and-analyze-record-id`
+  - raw folder now includes:
+    - `background.m4a`
+  - newest edited output:
+    - `7129084799339351323-3_new.mp4`
+  - `ffprobe` confirmed the rendered file now has an AAC audio stream

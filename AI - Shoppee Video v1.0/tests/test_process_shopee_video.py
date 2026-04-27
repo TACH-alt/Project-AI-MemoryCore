@@ -15,9 +15,11 @@ from process_shopee_video import (
     canonicalize_tiktok_url,
     cleanup_non_media_outputs,
     derive_output_name,
+    download_tiktok_photo_audio,
     download_tiktok_thumbnail_with_ytdlp,
     ensure_masterlist_columns,
     extract_media_urls_from_html,
+    find_background_audio,
     filter_media_urls,
     find_executable,
     infer_image_extension,
@@ -167,6 +169,18 @@ class HelperTests(unittest.TestCase):
             self.assertTrue(keep.exists())
             self.assertFalse(remove.exists())
 
+    def test_cleanup_non_media_outputs_keeps_background_audio(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            keep = raw_dir / "background.m4a"
+            keep.write_bytes(b"audio")
+
+            removed = cleanup_non_media_outputs(raw_dir)
+
+            self.assertEqual(removed, [])
+            self.assertTrue(keep.exists())
+
     def test_infer_image_extension_detects_jpeg_bytes(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             artifact = Path(tmp) / "thumb.image"
@@ -207,6 +221,42 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(len(images), 1)
             self.assertEqual(images[0].suffix.lower(), ".jpg")
             self.assertTrue(images[0].exists())
+
+    def test_download_tiktok_photo_audio_returns_downloaded_native_audio(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+
+            def fake_run(command, capture_output, text, check):
+                self.assertIn("--format", command)
+                self.assertIn("bestaudio", command)
+                self.assertNotIn("-x", command)
+                (raw_dir / "background.m4a").write_bytes(b"audio")
+
+                class Result:
+                    returncode = 0
+                return Result()
+
+            from unittest.mock import patch
+
+            with patch("process_shopee_video.subprocess.run", side_effect=fake_run):
+                audio = download_tiktok_photo_audio(
+                    "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+                    raw_dir,
+                )
+
+            self.assertIsNotNone(audio)
+            self.assertEqual(audio.name, "background.m4a")
+            self.assertTrue(audio.exists())
+
+    def test_find_background_audio_prefers_existing_supported_file(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            audio = raw_dir / "background.m4a"
+            audio.write_bytes(b"audio")
+
+            self.assertEqual(find_background_audio(raw_dir), audio)
 
     def test_filter_media_urls_skips_site_chrome_assets(self):
         urls = filter_media_urls(

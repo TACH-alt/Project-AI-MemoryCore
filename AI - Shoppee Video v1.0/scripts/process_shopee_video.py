@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+AUDIO_EXTENSIONS = {".aac", ".m4a", ".mp3", ".opus", ".ogg", ".wav", ".webm"}
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
 RENDER_MODES = frozenset({"auto", "light", "vertical-blur"})
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0"
@@ -658,14 +659,15 @@ def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
 
 def cleanup_non_media_outputs(directory: Path) -> list[Path]:
     """Remove yt-dlp scratch files from directory, preserving media and background audio."""
-    _KEEP_NAMES = {"background.aac"}
     removed: list[Path] = []
     if not directory.exists():
         return removed
     for path in directory.iterdir():
         if path.is_dir():
             continue
-        if path.suffix.lower() in MEDIA_EXTENSIONS or path.name in _KEEP_NAMES:
+        if path.suffix.lower() in MEDIA_EXTENSIONS:
+            continue
+        if path.stem == "background" and path.suffix.lower() in AUDIO_EXTENSIONS:
             continue
         path.unlink(missing_ok=True)
         removed.append(path)
@@ -724,28 +726,35 @@ def download_tiktok_thumbnail_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
 def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:
     """Download the background audio track from a TikTok photo-mode (carousel) post.
 
-    Saves the audio as ``background.aac`` inside *raw_dir*.
+    Saves the audio as ``background.<ext>`` inside *raw_dir*.
     Returns the path on success, or ``None`` if unavailable or if yt-dlp fails.
     Photo-mode posts have no downloadable video stream but always carry a music track;
     the audio file is later picked up by ``render_video`` and merged into the rendered output.
     """
-    target = raw_dir / "background.aac"
-    target.unlink(missing_ok=True)
+    for existing in raw_dir.glob("background.*"):
+        existing.unlink(missing_ok=True)
     command = [
         *build_ytdlp_prefix(),
         "--no-playlist",
-        "--format", "ba",
-        "-x",
-        "--audio-format", "aac",
-        "--audio-quality", "0",
+        "--format", "bestaudio",
         "--paths", str(raw_dir),
         "--output", "background.%(ext)s",
         url,
     ]
     result = subprocess.run(command, capture_output=True, text=True, check=False)
-    if result.returncode == 0 and target.exists() and target.stat().st_size > 0:
-        return target
-    target.unlink(missing_ok=True)
+    if result.returncode == 0:
+        for target in sorted(raw_dir.glob("background.*")):
+            if target.suffix.lower() in AUDIO_EXTENSIONS and target.stat().st_size > 0:
+                return target
+    for target in raw_dir.glob("background.*"):
+        target.unlink(missing_ok=True)
+    return None
+
+
+def find_background_audio(raw_dir: Path) -> Path | None:
+    for candidate in sorted(raw_dir.glob("background.*")):
+        if candidate.suffix.lower() in AUDIO_EXTENSIONS and candidate.is_file():
+            return candidate
     return None
 
 
@@ -893,8 +902,7 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: st
     elif raw_path.suffix.lower() in IMAGE_EXTENSIONS:
         output_name = f"{safe_filename(raw_path.stem)}_new.mp4"
         # Photo-mode TikTok: look for background audio saved alongside the thumbnail
-        _audio_candidate = raw_path.parent / "background.aac"
-        background_audio = _audio_candidate if _audio_candidate.exists() else None
+        background_audio = find_background_audio(raw_path.parent)
     else:
         return None
 

@@ -75,11 +75,13 @@
 - **Where We Left Off**: `AI - Shoppee Video v1.0` local automation was created and committed. The main workspace now contains the scaffold, masterlist CSV/XLSX, Python processor, PowerShell runner, tests, design spec, implementation plan, and Obsidian project note.
 - **Where We Left Off**: The analysis and TikTok implementation is complete in the isolated worktree branch and has been documented and mirrored to Obsidian.
 - **Where We Left Off**: Main-workspace TikTok downloader reliability was upgraded and the previously failing TikTok row `ATV-0000001` now completes through `Download + Analyze`.
+- **Where We Left Off**: TikTok photo-mode background audio bug was fixed; the newest `ATV-0000001` edited output now includes an AAC audio stream sourced from `background.m4a`.
 - **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.
 - **Review Rule**: Do not overwrite Claude's in-progress main-workspace code; use the isolated worktree branch as the safe implementation checkpoint.
 - **TikTok Rule**: TikTok photo-mode posts may expose audio plus thumbnail media instead of an mp4; the workflow now falls back to thumbnail capture and still renders an edited output.
+- **TikTok Audio Rule**: For photo-mode posts, preserve native `background.<ext>` audio from `yt-dlp` instead of forcing AAC extraction during download; FFmpeg merges it later during render.
 
 ## Session Achievements
 - Repo cloned successfully via user-run PowerShell (git path resolution handled).
