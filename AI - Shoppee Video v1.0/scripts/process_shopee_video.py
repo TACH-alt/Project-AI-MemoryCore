@@ -5,6 +5,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 import html
+import json
 import os
 from pathlib import Path
 import re
@@ -20,12 +21,14 @@ from urllib.request import Request, urlopen
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
+RENDER_MODES = frozenset({"auto", "light", "vertical-blur"})
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0"
 SHOPEE_PAGE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
     "AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
 )
 REQUIRED_COLUMNS = [
+    "Record ID",
     "Date",
     "Product Link",
     "Product Name",
@@ -33,6 +36,7 @@ REQUIRED_COLUMNS = [
     "Source Type",
     "Status",
     "Done",
+    "Analysis Done",
     "Notes",
     "Last Processed At",
     "Output Folder",
@@ -43,6 +47,7 @@ REQUIRED_COLUMNS = [
 @dataclass
 class MasterRow:
     row_number: int
+    record_id: str
     product_link: str
     product_name: str
     shop_name: str
@@ -57,6 +62,7 @@ class WorkflowConfig:
     masterlist_path: Path
     force: bool = False
     dry_run: bool = False
+    render_mode: str = "auto"
 
 
 def safe_filename(value: str) -> str:
@@ -115,9 +121,123 @@ def is_shopee_cdn_media_url(url: str) -> bool:
     )
 
 
+def is_tiktok_video_url(url: str) -> bool:
+    """Return True for public single TikTok video URLs.
+
+    Handles:
+    - Standard long URLs: https://www.tiktok.com/@user/video/123456
+    - Short redirect links: https://vt.tiktok.com/ZS9hjGD43/
+    """
+    parsed = urlparse(url)
+    host = parsed.netloc.lower()
+    if not host.endswith("tiktok.com"):
+        return False
+    # Short links (vt.tiktok.com) are always single-video redirects — trust yt-dlp
+    if host == "vt.tiktok.com":
+        return True
+    # Standard long URLs must contain /video/ in the path
+    return "/video/" in parsed.path
+
+
+def detect_platform(url: str) -> str:
+    """Return 'Shopee', 'TikTok', or 'Direct' based on the URL."""
+    if is_shopee_url(url):
+        return "Shopee"
+    if is_tiktok_video_url(url):
+        return "TikTok"
+    return "Direct"
+
+
+def record_prefix_for_url(url: str) -> str:
+    platform = detect_platform(url)
+    if platform == "TikTok":
+        return "ATV"
+    return "ASV"
+
+
+def next_record_id(rows: list[dict[str, str]], prefix: str) -> str:
+    """Generate the next sequential Record ID for a given prefix (ASV or ATV)."""
+    max_num = 0
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
+    for row in rows:
+        match = pattern.match(row.get("Record ID", ""))
+        if match:
+            max_num = max(max_num, int(match.group(1)))
+    return f"{prefix}-{max_num + 1:07d}"
+
+
+def backfill_record_identity(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Ensure every row has a Record ID; assign missing ones in order."""
+    for row in rows:
+        if not row.get("Record ID"):
+            prefix = record_prefix_for_url(row.get("Product Link", ""))
+            row["Record ID"] = next_record_id(rows, prefix)
+        if row.get("Analysis Done") is None or row.get("Analysis Done") == "":
+            row["Analysis Done"] = "FALSE"
+    return rows
+
+
+def resolve_shop_folder(platform_root: Path, shop_name: str) -> Path:
+    """Find an existing shop folder (case-insensitive) or return a new one."""
+    if platform_root.exists():
+        for existing in platform_root.iterdir():
+            if existing.is_dir() and existing.name.lower() == shop_name.lower():
+                return existing
+    return platform_root / safe_filename(shop_name)
+
+
+def resolve_product_folder(output_root: Path, platform: str, shop_name: str, product_name: str) -> Path:
+    """Resolve output/<Platform>/<Shop>/<Product> path with case-insensitive shop matching."""
+    platform_root = output_root / platform
+    shop_folder = resolve_shop_folder(platform_root, shop_name)
+    return shop_folder / safe_filename(product_name)
+
+
+def write_product_info(product_dir: Path, row: dict[str, str], platform: str) -> None:
+    """Write or refresh product-info.md in the product folder."""
+    product_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = product_dir / "raw"
+    video_count = 0
+    image_count = 0
+    if raw_dir.exists():
+        for f in raw_dir.iterdir():
+            if f.suffix.lower() in VIDEO_EXTENSIONS:
+                video_count += 1
+            elif f.suffix.lower() in IMAGE_EXTENSIONS:
+                image_count += 1
+    output_file_summary = row.get("Output File", "") or "None"
+    content = f"""# Product Info
+
+| Field | Value |
+|---|---|
+| Record ID | {row.get("Record ID", "")} |
+| Date | {row.get("Date", "")} |
+| Product Link | {row.get("Product Link", "")} |
+| Product Name | {row.get("Product Name", "")} |
+| Shop Name | {row.get("Shop Name", "")} |
+| Platform | {platform} |
+| Source Type | {row.get("Source Type", "")} |
+| Status | {row.get("Status", "")} |
+| Done | {row.get("Done", "FALSE")} |
+| Analysis Done | {row.get("Analysis Done", "FALSE")} |
+| Notes | {row.get("Notes", "")} |
+
+## Media Summary
+
+| Type | Count |
+|---|---|
+| Videos downloaded | {video_count} |
+| Images downloaded | {image_count} |
+| Latest output file | {output_file_summary} |
+"""
+    (product_dir / "product-info.md").write_text(content, encoding="utf-8")
+
+
 def no_media_message(url: str) -> str:
     if is_shopee_url(url):
         return "Shopee page did not expose downloadable product media; use an approved seller media/direct file link"
+    if is_tiktok_video_url(url):
+        return "TikTok video could not be downloaded; ensure the URL is a public single-video link"
     return "No downloadable media found"
 
 
@@ -177,9 +297,11 @@ def build_ytdlp_command(
 
 def default_value_for_column(column: str) -> str:
     defaults = {
+        "Record ID": "",
         "Source Type": "Auto",
         "Status": "Pending",
         "Done": "FALSE",
+        "Analysis Done": "FALSE",
     }
     return defaults.get(column, "")
 
@@ -206,6 +328,7 @@ def ensure_masterlist_columns(masterlist_path: Path) -> None:
     current_rows = []
     for row in original_rows:
         current_rows.append({column: (row.get(column) or "").strip() for column in REQUIRED_COLUMNS})
+    rows = backfill_record_identity(rows)
     if fieldnames == REQUIRED_COLUMNS and current_rows == rows:
         return
     write_masterlist(masterlist_path, rows)
@@ -222,6 +345,7 @@ def read_masterlist(masterlist_path: Path) -> list[dict[str, str]]:
 
 
 def write_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> None:
+    rows = backfill_record_identity(rows)
     with masterlist_path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=REQUIRED_COLUMNS)
         writer.writeheader()
@@ -264,17 +388,19 @@ def sync_excel_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> 
         for column_index, header in enumerate(REQUIRED_COLUMNS, start=1):
             sheet.cell(row_index, column_index).value = normalized[header]
     widths = {
-        "A": 14,
-        "B": 44,
-        "C": 28,
-        "D": 22,
-        "E": 18,
-        "F": 16,
-        "G": 12,
-        "H": 34,
-        "I": 22,
-        "J": 36,
-        "K": 36,
+        "A": 14,  # Record ID
+        "B": 14,  # Date
+        "C": 44,  # Product Link
+        "D": 28,  # Product Name
+        "E": 22,  # Shop Name
+        "F": 18,  # Source Type
+        "G": 16,  # Status
+        "H": 12,  # Done
+        "I": 14,  # Analysis Done
+        "J": 34,  # Notes
+        "K": 22,  # Last Processed At
+        "L": 36,  # Output Folder
+        "M": 36,  # Output File
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -284,6 +410,7 @@ def sync_excel_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> 
 def master_row_from_record(record: dict[str, str], row_number: int) -> MasterRow:
     return MasterRow(
         row_number=row_number,
+        record_id=record.get("Record ID", ""),
         product_link=record["Product Link"],
         product_name=record["Product Name"],
         shop_name=record["Shop Name"],
@@ -506,47 +633,89 @@ def escape_drawtext(value: str) -> str:
     return value.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def build_ffmpeg_command(ffmpeg: str, raw_path: Path, output_path: Path, caption: str) -> list[str]:
-    if raw_path.suffix.lower() in VIDEO_EXTENSIONS:
-        input_args = ["-i", str(raw_path)]
-        duration_args: list[str] = []
-    else:
-        input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
-        duration_args = ["-shortest"]
+def build_ffmpeg_command(
+    ffmpeg: str,
+    raw_path: Path,
+    output_path: Path,
+    caption: str,
+    render_mode: str = "auto",
+) -> list[str]:
+    """Build an FFmpeg command for rendering a product video.
+
+    Render modes:
+    - ``auto``         — ``light`` for video sources, ``vertical-blur`` for image sources
+    - ``light``        — scale-to-fit with black padding, small caption, preserves audio
+    - ``vertical-blur``— blurred background canvas composition, larger caption, preserves audio
+    Image sources always use the ``vertical-blur`` composition regardless of render_mode.
+    """
+    suffix = raw_path.suffix.lower()
+    is_image = suffix in IMAGE_EXTENSIONS
 
     font = "C\\:/Windows/Fonts/arial.ttf"
     text = escape_drawtext(caption)
-    filter_graph = (
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
-        "crop=1080:1920,boxblur=20:1[bg];"
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
-        "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-        f"drawtext=fontfile='{font}':text='{text}':"
-        "x=(w-text_w)/2:y=h-220:fontsize=54:"
-        "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28[v]"
-    )
+
+    if is_image:
+        # Image source: loop for 8 s, blur canvas, no source audio
+        input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
+        duration_args: list[str] = ["-shortest"]
+        has_audio = False
+        filter_graph = (
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+            "crop=1080:1920,boxblur=20:1[bg];"
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
+            "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+            f"drawtext=fontfile='{font}':text='{text}':"
+            "x=(w-text_w)/2:y=h-120:fontsize=42:"
+            "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=20[v]"
+        )
+    else:
+        # Video source: resolve auto mode
+        effective_mode = "light" if render_mode == "auto" else render_mode
+        input_args = ["-i", str(raw_path)]
+        duration_args = []
+        has_audio = True
+
+        if effective_mode == "light":
+            # Scale to fit inside 1080x1920 with black padding; minimal caption
+            filter_graph = (
+                "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
+                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,"
+                f"drawtext=fontfile='{font}':text='{text}':"
+                "x=(w-text_w)/2:y=h-100:fontsize=40:"
+                "fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=18[v]"
+            )
+        else:
+            # vertical-blur: blurred background + centred overlay + larger caption
+            filter_graph = (
+                "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920,boxblur=20:1[bg];"
+                "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
+                "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+                f"drawtext=fontfile='{font}':text='{text}':"
+                "x=(w-text_w)/2:y=h-220:fontsize=54:"
+                "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28[v]"
+            )
+
+    audio_map = ["-map", "0:a?", "-c:a", "aac"] if has_audio else []
+
     return [
         ffmpeg,
         "-y",
         *input_args,
         "-filter_complex",
         filter_graph,
-        "-map",
-        "[v]",
-        "-r",
-        "30",
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
+        "-map", "[v]",
+        *audio_map,
+        "-r", "30",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
         *duration_args,
         str(output_path),
     ]
 
 
-def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
+def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: str = "auto") -> Path | None:
     ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
     if not ffmpeg:
         return None
@@ -560,7 +729,7 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str) -> Path | None:
         return None
 
     output_path = unique_path(edited_dir, output_name)
-    command = build_ffmpeg_command(ffmpeg, raw_path, output_path, caption)
+    command = build_ffmpeg_command(ffmpeg, raw_path, output_path, caption, render_mode=render_mode)
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {raw_path.name}: {result.stderr.strip()[-500:]}")
@@ -599,6 +768,200 @@ def update_record(record: dict[str, str], status: str, notes: str, output_folder
         record["Output File"] = "; ".join(files)
 
 
+def find_record_by_id(records: list[dict[str, str]], record_id: str) -> dict[str, str] | None:
+    """Return the first record whose Record ID matches (case-sensitive)."""
+    for record in records:
+        if record.get("Record ID", "") == record_id:
+            return record
+    return None
+
+
+def media_summary_for_analysis(media_path: Path) -> dict[str, str]:
+    """Extract technical metadata from a media file using FFprobe.
+
+    Falls back to 'unknown' for any value that cannot be determined.
+    """
+    summary = {
+        "duration": "unknown",
+        "resolution": "unknown",
+        "fps": "unknown",
+        "audio": "unknown",
+    }
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return summary
+
+    cmd = [
+        ffprobe, "-v", "quiet", "-print_format", "json",
+        "-show_streams", "-show_format", str(media_path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=30)
+        if result.returncode != 0:
+            return summary
+        data = json.loads(result.stdout)
+        streams = data.get("streams", [])
+        fmt = data.get("format", {})
+        # Duration from format
+        dur = fmt.get("duration")
+        if dur:
+            try:
+                seconds = float(dur)
+                summary["duration"] = f"{seconds:.1f}s"
+            except ValueError:
+                pass
+        video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+        audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+        if video_stream:
+            w = video_stream.get("width")
+            h = video_stream.get("height")
+            if w and h:
+                summary["resolution"] = f"{w}x{h}"
+            # FPS from avg_frame_rate or r_frame_rate
+            for key in ("avg_frame_rate", "r_frame_rate"):
+                rate = video_stream.get(key, "")
+                if rate and "/" in rate:
+                    try:
+                        num, den = rate.split("/")
+                        fps = float(num) / float(den)
+                        if fps > 0:
+                            summary["fps"] = f"{fps:.2f}"
+                            break
+                    except (ValueError, ZeroDivisionError):
+                        pass
+        summary["audio"] = "yes" if audio_stream else "no"
+    except Exception:
+        pass
+    return summary
+
+
+def choose_analysis_media(product_dir: Path, output_file: str = "") -> Path | None:
+    """Choose the best available media file for analysis.
+
+    Priority: edited video > raw video > raw image.
+    Falls back to the recorded output_file path if provided.
+    """
+    # 1. Try output_file from masterlist
+    if output_file:
+        for path_str in output_file.split(";"):
+            candidate = Path(path_str.strip())
+            if candidate.exists() and candidate.suffix.lower() in MEDIA_EXTENSIONS:
+                return candidate
+
+    # 2. Scan edited/ for videos
+    edited_dir = product_dir / "edited"
+    if edited_dir.exists():
+        edited_videos = sorted(
+            (f for f in edited_dir.iterdir() if f.suffix.lower() in VIDEO_EXTENSIONS),
+            key=lambda f: f.stat().st_size,
+            reverse=True,
+        )
+        if edited_videos:
+            return edited_videos[0]
+
+    # 3. Scan raw/ for videos then images
+    raw_dir = product_dir / "raw"
+    if raw_dir.exists():
+        raw_videos = sorted(
+            (f for f in raw_dir.iterdir() if f.suffix.lower() in VIDEO_EXTENSIONS),
+            key=lambda f: f.stat().st_size,
+            reverse=True,
+        )
+        if raw_videos:
+            return raw_videos[0]
+        raw_images = sorted(
+            (f for f in raw_dir.iterdir() if f.suffix.lower() in IMAGE_EXTENSIONS),
+        )
+        if raw_images:
+            return raw_images[0]
+
+    return None
+
+
+def write_analysis_result(product_dir: Path, row: dict[str, str], platform: str, media_path: Path) -> None:
+    """Write analysis/analysis-result.md into the product folder."""
+    analysis_dir = product_dir / "analysis"
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+
+    tech = media_summary_for_analysis(media_path)
+    content = f"""# Analysis Result
+
+| Field | Value |
+|---|---|
+| Record ID | {row.get("Record ID", "")} |
+| Platform | {platform} |
+| Product Name | {row.get("Product Name", "")} |
+| Shop Name | {row.get("Shop Name", "")} |
+| Product Link | {row.get("Product Link", "")} |
+| Source Type | {row.get("Source Type", "")} |
+| Analyzed File | {media_path.name} |
+
+## Technical Summary
+
+| Property | Value |
+|---|---|
+| Duration | {tech["duration"]} |
+| Resolution | {tech["resolution"]} |
+| FPS | {tech["fps"]} |
+| Audio | {tech["audio"]} |
+
+## Suggested Hooks
+
+- Opening frame: capture the most visually striking moment in the first 3 seconds
+- Lead with the product in action, not the packaging
+- Consider a before/after or problem/solution opener if the product solves a visible issue
+
+## Suggested Angles
+
+- Lifestyle context: show the product being used in a realistic setting
+- Feature callout: zoom in on the key differentiating feature
+- Social proof angle: results-focused framing (e.g. "this cleared my room in 5 minutes")
+
+## Suggested Clip Sequence
+
+1. Hook clip — product highlight or dramatic result
+2. Context clip — product shown in environment/use
+3. Feature clip — close-up on key details
+4. CTA clip — price, offer, or call to action
+
+## CTA Suggestions
+
+- "Tap the link in bio to order"
+- "Limited stocks — check Shopee now"
+- "Free shipping this week only"
+
+## CapCut / Manual Handoff Note
+
+Import the analyzed file into CapCut. Trim to hook within first 1–3 s.
+Apply captions from the Product Name and Shop Name. Export at 1080×1920 (9:16) for TikTok/Reels.
+"""
+    (analysis_dir / "analysis-result.md").write_text(content, encoding="utf-8")
+
+
+def analyze_row_record(project_root: Path, record: dict[str, str]) -> None:
+    """Run analysis on a single row identified by its Record ID.
+
+    Raises RuntimeError if no media is available.
+    Updates Analysis Done and refreshes product-info.md on success.
+    """
+    record_id = record.get("Record ID", "")
+    platform = detect_platform(record.get("Product Link", ""))
+    product_folder = resolve_product_folder(
+        project_root / "output",
+        platform,
+        record.get("Shop Name", ""),
+        record.get("Product Name", ""),
+    )
+    media_path = choose_analysis_media(product_folder, record.get("Output File", ""))
+    if not media_path:
+        raise RuntimeError(
+            f"No downloaded media found for Record ID {record_id}. Run Download first."
+        )
+    write_analysis_result(product_folder, record, platform, media_path)
+    record["Analysis Done"] = "TRUE"
+    write_product_info(product_folder, record, platform)
+
+
 def process_pending_rows(config: WorkflowConfig) -> int:
     records = read_masterlist(config.masterlist_path)
     log_path = config.project_root / "logs" / "run-log.csv"
@@ -618,7 +981,8 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             print(f"Row {row.row_number}: {message}")
             continue
 
-        product_folder = config.project_root / "output" / build_product_folder_name(row.product_name, row.shop_name)
+        platform = detect_platform(row.product_link)
+        product_folder = resolve_product_folder(config.project_root / "output", platform, row.shop_name, row.product_name)
         raw_dir = product_folder / "raw"
         edited_dir = product_folder / "edited"
 
@@ -633,7 +997,7 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             caption = build_caption(row.product_name, row.shop_name)
             edited_files = []
             for raw_file in raw_files:
-                rendered = render_video(raw_file, edited_dir, caption)
+                rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode)
                 if rendered:
                     edited_files.append(rendered)
             if edited_files:
@@ -644,6 +1008,7 @@ def process_pending_rows(config: WorkflowConfig) -> int:
                 message = "Downloaded raw media; FFmpeg is not installed or no renderable media was found"
                 update_record(record, "Downloaded", message, product_folder, raw_files)
                 append_log(log_path, row, "Downloaded", message, "; ".join(str(path) for path in raw_files))
+            write_product_info(product_folder, record, platform)
             print(f"Row {row.row_number}: {message}")
         except Exception as exc:
             message = str(exc)
@@ -665,6 +1030,30 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--masterlist", type=Path, default=None)
     parser.add_argument("--force", action="store_true", help="Reprocess rows even when Status is not Pending.")
     parser.add_argument("--dry-run", action="store_true", help="Print actions without downloading or updating files.")
+    parser.add_argument(
+        "--render-mode",
+        choices=list(RENDER_MODES),
+        default="auto",
+        help=(
+            "Video render mode: 'auto' (default) uses light for videos and vertical-blur for images; "
+            "'light' scales to fit with black padding and preserves audio; "
+            "'vertical-blur' uses a blurred background canvas."
+        ),
+    )
+    parser.add_argument(
+        "--analyze-record-id",
+        type=str,
+        default=None,
+        metavar="RECORD_ID",
+        help="Run analysis only for the given Record ID (e.g. ASV-0000001). No download is performed.",
+    )
+    parser.add_argument(
+        "--download-and-analyze-record-id",
+        type=str,
+        default=None,
+        metavar="RECORD_ID",
+        help="Download then analyze the given Record ID in one step.",
+    )
     return parser.parse_args(argv)
 
 
@@ -677,7 +1066,64 @@ def main(argv: list[str] | None = None) -> int:
         masterlist_path=masterlist.resolve(),
         force=args.force,
         dry_run=args.dry_run,
+        render_mode=args.render_mode,
     )
+
+    # Analyze-only mode
+    analyze_id = getattr(args, "analyze_record_id", None)
+    if analyze_id:
+        try:
+            records = read_masterlist(config.masterlist_path)
+            record = find_record_by_id(records, analyze_id)
+            if not record:
+                print(f"Record ID {analyze_id} not found in masterlist.", file=sys.stderr)
+                return 1
+            analyze_row_record(project_root, record)
+            write_masterlist(config.masterlist_path, records)
+            print(f"Analysis complete for {analyze_id}.")
+        except Exception as exc:
+            print(f"Analysis failed: {exc}", file=sys.stderr)
+            return 1
+        return 0
+
+    # Download + Analyze mode
+    dl_analyze_id = getattr(args, "download_and_analyze_record_id", None)
+    if dl_analyze_id:
+        try:
+            records = read_masterlist(config.masterlist_path)
+            record = find_record_by_id(records, dl_analyze_id)
+            if not record:
+                print(f"Record ID {dl_analyze_id} not found in masterlist.", file=sys.stderr)
+                return 1
+            row = master_row_from_record(record, 0)
+            platform = detect_platform(row.product_link)
+            product_folder = resolve_product_folder(
+                project_root / "output", platform, row.shop_name, row.product_name
+            )
+            raw_files = collect_media(row, product_folder / "raw")
+            if not raw_files:
+                raise RuntimeError(no_media_message(row.product_link))
+            caption = build_caption(row.product_name, row.shop_name)
+            edited_files = []
+            for raw_file in raw_files:
+                rendered = render_video(raw_file, product_folder / "edited", caption, render_mode=config.render_mode)
+                if rendered:
+                    edited_files.append(rendered)
+            if edited_files:
+                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
+                update_record(record, "Edited", message, product_folder, edited_files)
+            else:
+                message = "Downloaded raw media; FFmpeg not available or no renderable media"
+                update_record(record, "Downloaded", message, product_folder, raw_files)
+            write_product_info(product_folder, record, platform)
+            analyze_row_record(project_root, record)
+            write_masterlist(config.masterlist_path, records)
+            print(f"Download + Analyze complete for {dl_analyze_id}.")
+        except Exception as exc:
+            print(f"Download + Analyze failed: {exc}", file=sys.stderr)
+            return 1
+        return 0
+
     try:
         process_pending_rows(config)
     except Exception as exc:

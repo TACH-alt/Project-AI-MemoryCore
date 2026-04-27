@@ -11,10 +11,14 @@ import webbrowser
 
 from process_shopee_video import (
     REQUIRED_COLUMNS,
-    build_product_folder_name,
+    analyze_row_record,
+    detect_platform,
     ensure_masterlist_columns,
+    find_record_by_id,
     read_masterlist,
+    resolve_product_folder,
     write_masterlist,
+    write_product_info,
 )
 
 
@@ -22,242 +26,431 @@ HTML = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>AI - Shoppee Video v1.0</title>
   <style>
     :root {
       color-scheme: light;
-      --ink: #1d2433;
-      --muted: #667085;
-      --line: #d6dae3;
-      --panel: #ffffff;
-      --wash: #f5f7fb;
-      --brand: #0f766e;
-      --brand-2: #b42318;
-      --focus: #d97706;
+      --ink: #1d2433; --muted: #667085; --line: #d6dae3;
+      --panel: #fff; --wash: #f5f7fb;
+      --brand: #0f766e; --brand-dk: #0c5f58; --brand-2: #b42318; --focus: #d97706;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      color: var(--ink);
-      background: var(--wash);
-    }
-    header {
-      background: var(--brand);
-      color: white;
-      padding: 18px 24px;
-    }
-    h1 {
-      font-size: 22px;
-      margin: 0;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
-    main {
-      width: min(1040px, calc(100vw - 32px));
-      margin: 22px auto 36px;
-      display: grid;
-      gap: 18px;
-    }
-    section {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 13px;
-      font-weight: 650;
-    }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); background: var(--wash);
+           padding-bottom: env(safe-area-inset-bottom); }
+    header { background: var(--brand); color: white; padding: 13px 22px; display: flex; align-items: center; gap: 10px;
+             padding-left: max(22px, env(safe-area-inset-left)); padding-right: max(22px, env(safe-area-inset-right)); }
+    h1 { font-size: 19px; margin: 0; font-weight: 700; }
+    #headerSub { font-size: 12px; opacity: .8; margin-left: auto; }
+    main { width: min(1120px, calc(100vw - 28px)); margin: 18px auto 40px; display: grid; gap: 14px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+    .sec-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 12px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 11px; }
+    .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 11px; }
+    .wide  { grid-column: 1 / -1; }
+    label  { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+    label span.hint { font-weight: 400; color: var(--muted); font-size: 11px; }
     input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 10px 11px;
-      font: inherit;
-      background: white;
-      color: var(--ink);
+      width: 100%; border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 10px; font: inherit; background: white; color: var(--ink); transition: border-color .15s;
     }
-    textarea { min-height: 76px; resize: vertical; }
-    .wide { grid-column: 1 / -1; }
-    .checkline {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 42px;
-      font-weight: 650;
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); }
+    textarea { min-height: 56px; resize: vertical; }
+    .checkline { display: flex; align-items: center; gap: 9px; min-height: 38px; font-size: 13px; font-weight: 600; }
+    .checkline input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line); }
+    button { border: 0; border-radius: 6px; padding: 8px 15px; min-height: 44px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    button:hover { opacity: .87; } button:disabled { opacity: .42; cursor: not-allowed; }
+    .btn-primary { background: var(--brand); color: white; }
+    .btn-danger  { background: var(--brand-2); color: white; }
+    .btn-plain   { background: #e6ecf4; color: var(--ink); }
+    .btn-sm      { padding: 3px 9px; min-height: 26px; font-size: 12px; border-radius: 5px; }
+
+    /* Status bar */
+    #statusBox {
+      border-left: 4px solid var(--focus); background: #fff8eb; color: #533600;
+      white-space: pre-wrap; min-height: 44px; font-size: 13px; line-height: 1.5;
+      border-radius: 0 8px 8px 0; transition: border-color .25s, background .25s;
     }
-    .checkline input { width: 18px; height: 18px; }
-    .actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    button {
-      border: 0;
-      border-radius: 6px;
-      padding: 10px 14px;
-      min-height: 42px;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .primary { background: var(--brand); color: white; }
-    .danger { background: var(--brand-2); color: white; }
-    .plain { background: #e8edf4; color: var(--ink); }
-    .status {
-      border-left: 5px solid var(--focus);
-      background: #fff8eb;
-      color: #533600;
-      white-space: pre-wrap;
-      min-height: 56px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    th, td {
-      border-bottom: 1px solid var(--line);
-      padding: 8px;
-      text-align: left;
-      vertical-align: top;
-      word-break: break-word;
-    }
-    th { color: var(--muted); font-weight: 700; }
-    @media (max-width: 720px) {
-      .grid { grid-template-columns: 1fr; }
+    #statusBox.ok  { border-color: #16a34a; background: #f0fdf4; color: #14532d; }
+    #statusBox.err { border-color: #dc2626; background: #fef2f2; color: #7f1d1d; }
+
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 11px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-edited     { background: #d1fae5; color: #065f46; }
+    .badge-downloaded { background: #dbeafe; color: #1e40af; }
+    .badge-failed     { background: #fee2e2; color: #991b1b; }
+    .badge-pending    { background: #fef3c7; color: #92400e; }
+    .badge-skipped    { background: #f3f4f6; color: #374151; }
+
+    /* Table */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: middle; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8faff; }
+    .col-date { width: 88px; } .col-status { width: 96px; } .col-done { width: 52px; text-align: center; } .col-act { width: 120px; white-space: nowrap; }
+    .out-link { font-size: 11px; color: var(--brand); text-decoration: underline; cursor: pointer; display: block; margin-top: 3px; }
+    .done-ic  { font-size: 15px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #f3a800; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 5px; }
+
+    @media (max-width: 740px) { .grid3, .grid2 { grid-template-columns: 1fr; } }
+
+    /* ── Mobile (phone) ───────────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      header { padding: 10px 14px; padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); gap: 6px; }
+      h1 { font-size: 15px; }
+      #headerSub { font-size: 10px; max-width: 130px; text-align: right; line-height: 1.3; }
+      main { width: calc(100vw - 16px); margin: 10px auto 28px; gap: 10px; }
+      section { padding: 12px 12px; border-radius: 6px; }
+      .sec-title { font-size: 10px; margin-bottom: 10px; }
+
+      /* Inputs — 16px stops iOS from auto-zooming on focus */
+      input, select, textarea { font-size: 16px; padding: 12px; }
+      textarea { min-height: 64px; }
+
+      /* Action buttons — full width stack on phone */
+      .actions { flex-direction: column; gap: 8px; }
+      .actions button { width: 100%; font-size: 15px; min-height: 48px; border-radius: 8px; }
+      #refreshBtn { margin-left: 0 !important; order: 99; }
+      .btn-sm { min-height: 38px; padding: 6px 14px; font-size: 13px; }
+
+      /* Status box */
+      #statusBox { font-size: 13px; }
+
+      /* ── Card table layout ── */
+      .tbl-wrap { overflow-x: visible; }
+      table { min-width: 0; }
+      table, thead, tbody, tr, th, td { display: block; width: 100%; }
+      thead { display: none; }
+      tr {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+        margin-bottom: 12px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      }
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: transparent; }
+      td {
+        border: none; padding: 5px 0;
+        display: flex; gap: 8px; align-items: flex-start; font-size: 13px;
+        border-bottom: 1px solid var(--wash);
+      }
+      td:last-child { border-bottom: none; }
+      td::before {
+        content: attr(data-label);
+        font-size: 10px; font-weight: 700; color: var(--muted);
+        text-transform: uppercase; letter-spacing: .04em;
+        min-width: 62px; padding-top: 2px; flex-shrink: 0;
+      }
+      td.col-act { margin-top: 6px; justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
+      td.col-act::before { display: none; }
+      td.col-act button { flex: 1; min-width: 100px; }
+      .col-date, .col-status, .col-done, .col-act { width: auto; white-space: normal; }
+      .out-link { font-size: 12px; display: inline; }
     }
   </style>
 </head>
 <body>
-  <header><h1>AI - Shoppee Video v1.0</h1></header>
+  <header>
+    <h1>🎬 Shoppee Video v1.0</h1>
+    <span id="headerSub">Loading…</span>
+  </header>
   <main>
+
+    <!-- Form -->
     <section>
-      <form id="entryForm" class="grid">
-        <label>Date
-          <input name="Date" type="date" required>
-        </label>
+      <p class="sec-title">Add / Update Product Row</p>
+      <div class="grid3">
+        <label>Date <input id="fDate" name="Date" type="date" required></label>
         <label>Source Type
-          <select name="Source Type">
-            <option>Auto</option>
-            <option>Approved Media</option>
-            <option>Shopee Page</option>
+          <select id="fSrc">
+            <option>Auto</option><option>Approved Media</option><option>Shopee Page</option>
           </select>
         </label>
-        <label class="wide">Product Link
-          <input name="Product Link" type="url" required value="https://shopee.com.my/product/32632559/41452031782">
+        <label>Render Mode
+          <select id="fMode">
+            <option value="auto">Auto (light for video / blur for image)</option>
+            <option value="light">Light — scale + preserve audio</option>
+            <option value="vertical-blur">Vertical Blur — blur canvas</option>
+          </select>
         </label>
-        <label>Product Name
-          <input name="Product Name" required value="Shopee Product 41452031782">
+        <label style="opacity:.7">Record ID <span class="hint">Auto-assigned</span>
+          <input id="fRecordId" readonly placeholder="e.g. ASV-0000001" style="background:#f5f7fb;cursor:default">
         </label>
-        <label>Shop Name
-          <input name="Shop Name" required value="Shop 32632559">
+      </div>
+      <div class="grid2" style="margin-top:11px">
+        <label class="wide">Product Link <span class="hint">Full Shopee URL or direct media link — avoid short s.shopee.com.my links</span>
+          <input id="fLink" type="url" required placeholder="https://shopee.com.my/Product-Name-i.xxx.xxxxxxx">
         </label>
+        <label>Product Name <input id="fName" required placeholder="e.g. Electrova Cordless UV Mite"></label>
+        <label>Shop Name    <input id="fShop" required placeholder="e.g. Electrova"></label>
         <label>Status
-          <select name="Status">
-            <option>Pending</option>
-            <option>Downloaded</option>
-            <option>Edited</option>
-            <option>Failed</option>
-            <option>Skipped</option>
+          <select id="fStatus">
+            <option>Pending</option><option>Downloaded</option><option>Edited</option>
+            <option>Failed</option><option>Skipped</option>
           </select>
         </label>
-        <label class="checkline">
-          <input name="Done" type="checkbox">
-          Done
-        </label>
-        <label class="wide">Notes
-          <textarea name="Notes"></textarea>
-        </label>
-      </form>
+        <label class="checkline wide"><input id="fDone" type="checkbox"> Mark as Done</label>
+        <label class="wide">Notes <textarea id="fNotes" placeholder="Optional — e.g. retry reason, approved source…"></textarea></label>
+      </div>
       <div class="actions">
-        <button class="primary" id="saveBtn" type="button">Save</button>
-        <button class="danger" id="downloadBtn" type="button">Download</button>
-        <button class="plain" id="refreshBtn" type="button">Refresh</button>
-        <button class="plain" id="openBtn" type="button">Open Output Folder</button>
+        <button class="btn-primary" id="saveBtn">💾 Save Row</button>
+        <button class="btn-primary" id="saveNextBtn" style="background:#0369a1">💾 Save &amp; Add Next</button>
+        <button class="btn-danger"  id="dlBtn">⬇️ Save &amp; Download</button>
+        <button class="btn-danger"  id="dlAnalyzeBtn" style="background:#7c3aed">⬇️🔍 Save + Download + Analyze</button>
+        <button class="btn-plain"   id="analyzeBtn" style="background:#d1fae5;color:#065f46">🔍 Analyze</button>
+        <button class="btn-plain"   id="runAllBtn">▶ Run All Pending <span id="pendingBadge" class="badge badge-pending" style="display:none;margin-left:2px"></span></button>
+        <button class="btn-plain"   id="clearBtn">✕ Clear</button>
+        <button class="btn-plain"   id="openBtn">📂 Output Folder</button>
+        <button class="btn-plain"   id="refreshBtn" style="margin-left:auto">↺ Refresh</button>
       </div>
     </section>
-    <section class="status" id="statusBox">Ready.</section>
+
+    <!-- Status -->
+    <section id="statusBox">Ready — fill in a row and click Save or Download.</section>
+
+    <!-- Table -->
     <section>
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Product</th>
-            <th>Shop</th>
-            <th>Status</th>
-            <th>Done</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
+      <p class="sec-title">Masterlist <span id="rowCount" style="font-weight:400;font-size:11px"></span></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-date">Date</th>
+              <th>Product</th>
+              <th>Shop</th>
+              <th class="col-status">Status</th>
+              <th class="col-done">Done</th>
+              <th class="col-done" title="Analysis Done">🔍</th>
+              <th>Notes / Output</th>
+              <th class="col-act">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
     </section>
   </main>
+
   <script>
-    const form = document.getElementById("entryForm");
     const statusBox = document.getElementById("statusBox");
-    const rowsBody = document.getElementById("rows");
-    form.elements["Date"].valueAsDate = new Date();
+    const rowsBody  = document.getElementById("rows");
 
-    function payload() {
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.Done = form.elements["Done"].checked ? "TRUE" : "FALSE";
-      return data;
+    // ─── Helpers ────────────────────────────────────────────────────────────
+    function esc(s) { return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+    function setStatus(msg, type) {
+      statusBox.className = type || "";
+      statusBox.innerHTML = (!type || type === "busy")
+        ? `<span class="spinner"></span>${esc(msg)}`
+        : esc(msg);
     }
 
-    async function postJSON(url, body = {}) {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+    function badge(status) {
+      const cls = { Edited:"badge-edited", Downloaded:"badge-downloaded",
+                    Failed:"badge-failed", Pending:"badge-pending", Skipped:"badge-skipped" };
+      return `<span class="badge ${cls[status]||"badge-pending"}">${esc(status||"Pending")}</span>`;
+    }
+
+    async function api(url, body) {
+      const opts = body !== undefined
+        ? { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }
+        : {};
+      const res  = await fetch(url, opts);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Request failed");
+      if (!res.ok) { const e = new Error(data.message || "Request failed"); e.output = data.output; throw e; }
       return data;
     }
 
+    // ─── Form ────────────────────────────────────────────────────────────────
+    function getPayload() {
+      return {
+        "Record ID":    document.getElementById("fRecordId").value.trim(),
+        "Date":         document.getElementById("fDate").value,
+        "Product Link": document.getElementById("fLink").value,
+        "Product Name": document.getElementById("fName").value,
+        "Shop Name":    document.getElementById("fShop").value,
+        "Source Type":  document.getElementById("fSrc").value,
+        "Status":       document.getElementById("fStatus").value,
+        "Done":         document.getElementById("fDone").checked ? "TRUE" : "FALSE",
+        "Notes":        document.getElementById("fNotes").value,
+        "Render Mode":  document.getElementById("fMode").value,
+      };
+    }
+
+    function clearForm() {
+      document.getElementById("fLink").value      = "";
+      document.getElementById("fName").value      = "";
+      document.getElementById("fShop").value      = "";
+      document.getElementById("fNotes").value     = "";
+      document.getElementById("fStatus").value    = "Pending";
+      document.getElementById("fSrc").value       = "Auto";
+      document.getElementById("fMode").value      = "auto";
+      document.getElementById("fDone").checked    = false;
+      document.getElementById("fRecordId").value  = "";
+      document.getElementById("fDate").valueAsDate = new Date();
+    }
+
+    function loadRow(row) {
+      document.getElementById("fDate").value      = row.Date || "";
+      document.getElementById("fLink").value      = row["Product Link"] || "";
+      document.getElementById("fName").value      = row["Product Name"] || "";
+      document.getElementById("fShop").value      = row["Shop Name"] || "";
+      document.getElementById("fNotes").value     = row.Notes || "";
+      document.getElementById("fStatus").value    = row.Status || "Pending";
+      document.getElementById("fSrc").value       = row["Source Type"] || "Auto";
+      document.getElementById("fDone").checked    = row.Done === "TRUE";
+      document.getElementById("fRecordId").value  = row["Record ID"] || "";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      document.getElementById("fLink").focus();
+    }
+
+    // ─── Table ───────────────────────────────────────────────────────────────
     async function refresh() {
-      const res = await fetch("/api/rows");
-      const data = await res.json();
-      rowsBody.innerHTML = "";
-      for (const row of data.rows.slice(-20).reverse()) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${row.Date || ""}</td><td>${row["Product Name"] || ""}</td><td>${row["Shop Name"] || ""}</td><td>${row.Status || ""}</td><td>${row.Done || ""}</td><td>${row.Notes || ""}</td>`;
-        rowsBody.appendChild(tr);
-      }
+      try {
+        const { rows } = await api("/api/rows");
+        const total   = rows.length;
+        const edited  = rows.filter(r => r.Status === "Edited").length;
+        const failed  = rows.filter(r => r.Status === "Failed").length;
+        const pending = rows.filter(r => !r.Status || r.Status === "Pending").length;
+        document.getElementById("rowCount").textContent =
+          `(${total} row${total!==1?"s":""} · ✅ ${edited} · ❌ ${failed} · ⏳ ${pending})`;
+        document.getElementById("headerSub").textContent =
+          `${edited} edited · ${failed} failed · ${pending} pending`;
+        const pb = document.getElementById("pendingBadge");
+        if (pending > 0) { pb.textContent = pending; pb.style.display = "inline-block"; }
+        else { pb.style.display = "none"; }
+
+        rowsBody.innerHTML = "";
+        [...rows].reverse().slice(0, 40).forEach(row => {
+          const tr  = document.createElement("tr");
+          const out = (row["Output File"] || "").split(";")[0].trim();
+          const notesCell = esc(row.Notes || "") +
+            (out ? `<span class="out-link" data-path="${esc(out)}" title="${esc(out)}">📂 Open output file</span>` : "");
+
+          const recordId = row["Record ID"] || "";
+          tr.innerHTML = `
+            <td class="col-date" data-label="Date">${esc(row.Date)}</td>
+            <td data-label="Product">
+              <strong>${esc(row["Product Name"])}</strong>
+              ${recordId ? `<br><span style="color:var(--muted);font-size:10px;font-weight:600">${esc(recordId)}</span>` : ""}
+              <br><span style="color:var(--muted);font-size:11px">${esc(row["Product Link"])}</span>
+            </td>
+            <td data-label="Shop">${esc(row["Shop Name"])}</td>
+            <td class="col-status" data-label="Status">${badge(row.Status)}</td>
+            <td class="col-done" data-label="Done"><span class="done-ic">${row.Done==="TRUE"?"✅":"⬜"}</span></td>
+            <td class="col-done" data-label="Analyzed"><span class="done-ic">${row["Analysis Done"]==="TRUE"?"🔍":"⬜"}</span></td>
+            <td data-label="Notes" style="font-size:12px">${notesCell}</td>
+            <td class="col-act">
+              <button class="btn-plain btn-sm load-btn">↑ Load</button>
+              ${recordId ? `<button class="btn-plain btn-sm analyze-row-btn" style="background:#d1fae5;color:#065f46" data-rid="${esc(recordId)}">🔍</button>` : ""}
+              ${row.Status==="Failed"?`<button class="btn-danger btn-sm retry-btn" style="margin-left:4px">↺ Retry</button>`:""}
+            </td>`;
+
+          tr.querySelector(".load-btn").onclick = () => loadRow(row);
+          const retryBtn = tr.querySelector(".retry-btn");
+          if (retryBtn) retryBtn.onclick = () => { loadRow({...row, Status:"Pending"}); setStatus("Row loaded — click Save & Download to retry.", "ok"); };
+          const analyzeRowBtn = tr.querySelector(".analyze-row-btn");
+          if (analyzeRowBtn) analyzeRowBtn.onclick = async () => {
+            const rid = analyzeRowBtn.dataset.rid;
+            analyzeRowBtn.disabled = true;
+            setStatus(`Analyzing ${rid}…`);
+            try {
+              const r = await api("/api/analyze", { record_id: rid });
+              setStatus("✅ " + r.message, "ok"); await refresh();
+            } catch(e) { setStatus("❌ " + e.message, "err"); }
+            finally { analyzeRowBtn.disabled = false; }
+          };
+          if (out) tr.querySelector(".out-link").onclick = async () => {
+            try { await api("/api/open-file", { path: out }); }
+            catch(e) { setStatus("Could not open file: " + e.message, "err"); }
+          };
+          rowsBody.appendChild(tr);
+        });
+      } catch(e) { setStatus("Could not load rows: " + e.message, "err"); }
     }
 
+    // ─── Button handlers ─────────────────────────────────────────────────────
     document.getElementById("saveBtn").onclick = async () => {
-      statusBox.textContent = "Saving...";
-      const result = await postJSON("/api/save", payload());
-      statusBox.textContent = result.message;
-      await refresh();
+      const btn = document.getElementById("saveBtn");
+      btn.disabled = true; setStatus("Saving row to masterlist…");
+      try {
+        const r = await api("/api/save", getPayload());
+        setStatus("✅ " + r.message, "ok"); clearForm(); await refresh();
+      } catch(e) { setStatus("❌ " + e.message, "err"); }
+      finally { btn.disabled = false; }
     };
 
-    document.getElementById("downloadBtn").onclick = async () => {
-      statusBox.textContent = "Saving and running workflow...";
-      const result = await postJSON("/api/download", payload());
-      statusBox.textContent = result.message + "\\n\\n" + (result.output || "");
-      await refresh();
+    document.getElementById("dlBtn").onclick = async () => {
+      const btn = document.getElementById("dlBtn");
+      btn.disabled = true; setStatus("Saving row and running workflow — this may take 30–90 s…");
+      try {
+        const r = await api("/api/download", getPayload());
+        setStatus("✅ " + r.message + (r.output ? "\\n\\n" + r.output : ""), "ok");
+        clearForm(); await refresh();
+      } catch(e) { setStatus("❌ " + e.message + (e.output ? "\\n\\n" + e.output : ""), "err"); await refresh(); }
+      finally { btn.disabled = false; }
     };
 
+    document.getElementById("dlAnalyzeBtn").onclick = async () => {
+      const btn = document.getElementById("dlAnalyzeBtn");
+      btn.disabled = true; setStatus("Saving row, downloading, and analyzing — this may take 60–120 s…");
+      try {
+        const r = await api("/api/download-analyze", getPayload());
+        setStatus("✅ " + r.message + (r.output ? "\\n\\n" + r.output : ""), "ok");
+        clearForm(); await refresh();
+      } catch(e) { setStatus("❌ " + e.message + (e.output ? "\\n\\n" + e.output : ""), "err"); await refresh(); }
+      finally { btn.disabled = false; }
+    };
+
+    document.getElementById("analyzeBtn").onclick = async () => {
+      const rid = document.getElementById("fRecordId").value.trim();
+      if (!rid) { setStatus("❌ Load a row first — Record ID is required for Analyze.", "err"); return; }
+      const btn = document.getElementById("analyzeBtn");
+      btn.disabled = true; setStatus(`Analyzing ${rid}…`);
+      try {
+        const r = await api("/api/analyze", { record_id: rid });
+        setStatus("✅ " + r.message, "ok"); await refresh();
+      } catch(e) { setStatus("❌ " + e.message, "err"); }
+      finally { btn.disabled = false; }
+    };
+
+    document.getElementById("saveNextBtn").onclick = async () => {
+      const btn = document.getElementById("saveNextBtn");
+      btn.disabled = true; setStatus("Saving row…");
+      try {
+        const r = await api("/api/save", getPayload());
+        setStatus("✅ Saved — add your next link.", "ok");
+        clearForm(); await refresh();
+        document.getElementById("fLink").focus();
+      } catch(e) { setStatus("❌ " + e.message, "err"); }
+      finally { btn.disabled = false; }
+    };
+
+    document.getElementById("runAllBtn").onclick = async () => {
+      const btn = document.getElementById("runAllBtn");
+      btn.disabled = true; setStatus("Running workflow on all pending rows — this may take a while…");
+      try {
+        const r = await api("/api/run-workflow", {});
+        setStatus("✅ " + r.message + (r.output ? "\\n\\n" + r.output : ""), "ok");
+        await refresh();
+      } catch(e) { setStatus("❌ " + e.message + (e.output ? "\\n\\n" + e.output : ""), "err"); await refresh(); }
+      finally { btn.disabled = false; }
+    };
+
+    document.getElementById("clearBtn").onclick   = () => { clearForm(); setStatus("Form cleared.", "ok"); };
     document.getElementById("refreshBtn").onclick = refresh;
-    document.getElementById("openBtn").onclick = async () => {
-      const result = await postJSON("/api/open-output");
-      statusBox.textContent = result.message;
+    document.getElementById("openBtn").onclick    = async () => {
+      try { const r = await api("/api/open-output", {}); setStatus("📂 " + r.message, "ok"); }
+      catch(e) { setStatus("❌ " + e.message, "err"); }
     };
+
+    // Init
+    document.getElementById("fDate").valueAsDate = new Date();
     refresh();
+    setInterval(refresh, 20000);
   </script>
 </body>
 </html>
@@ -266,6 +459,7 @@ HTML = """<!doctype html>
 
 def default_row() -> dict[str, str]:
     return {
+        "Record ID": "",
         "Date": "",
         "Product Link": "",
         "Product Name": "",
@@ -273,6 +467,7 @@ def default_row() -> dict[str, str]:
         "Source Type": "Auto",
         "Status": "Pending",
         "Done": "FALSE",
+        "Analysis Done": "FALSE",
         "Notes": "",
         "Last Processed At": "",
         "Output Folder": "",
@@ -287,27 +482,60 @@ def normalize_frontend_row(payload: dict[str, str]) -> dict[str, str]:
     row["Source Type"] = row["Source Type"] or "Auto"
     row["Status"] = row["Status"] or "Pending"
     row["Done"] = "TRUE" if row["Done"].upper() in {"TRUE", "YES", "ON", "1"} else "FALSE"
+    row["Analysis Done"] = "TRUE" if row["Analysis Done"].upper() in {"TRUE", "YES", "ON", "1"} else "FALSE"
     return row
 
 
-def upsert_masterlist_row(masterlist_path: Path, payload: dict[str, str]) -> int:
+def upsert_masterlist_row(masterlist_path: Path, payload: dict[str, str]) -> tuple[int, dict[str, str]]:
+    """Save or update a row. Returns (row_number, final_record)."""
     ensure_masterlist_columns(masterlist_path)
     rows = read_masterlist(masterlist_path)
     row = normalize_frontend_row(payload)
     if not row["Product Link"] or not row["Product Name"] or not row["Shop Name"]:
         raise ValueError("Product Link, Product Name, and Shop Name are required.")
 
+    # Match by Record ID first (stable identity), fall back to Product Link
+    incoming_id = row.get("Record ID", "").strip()
     for index, existing in enumerate(rows):
-        if existing["Product Link"] == row["Product Link"]:
+        match_id = incoming_id and existing.get("Record ID", "") == incoming_id
+        match_link = not incoming_id and existing["Product Link"] == row["Product Link"]
+        if match_id or match_link:
             merged = existing.copy()
-            merged.update(row)
+            # Preserve fields the frontend does not edit
+            merged.update({k: v for k, v in row.items() if v or k not in {"Analysis Done", "Last Processed At", "Output Folder", "Output File"}})
             rows[index] = merged
             write_masterlist(masterlist_path, rows)
-            return index + 2
+            # Write product-info.md on save
+            platform = detect_platform(merged.get("Product Link", ""))
+            product_folder = resolve_product_folder(
+                masterlist_path.parent.parent / "output",
+                platform,
+                merged.get("Shop Name", ""),
+                merged.get("Product Name", ""),
+            )
+            try:
+                write_product_info(product_folder, merged, platform)
+            except Exception:
+                pass
+            return index + 2, merged
 
     rows.append(row)
     write_masterlist(masterlist_path, rows)
-    return len(rows) + 1
+    # The backfill in write_masterlist will have assigned a Record ID — get the refreshed list
+    refreshed = read_masterlist(masterlist_path)
+    final = refreshed[-1]
+    platform = detect_platform(final.get("Product Link", ""))
+    product_folder = resolve_product_folder(
+        masterlist_path.parent.parent / "output",
+        platform,
+        final.get("Shop Name", ""),
+        final.get("Product Name", ""),
+    )
+    try:
+        write_product_info(product_folder, final, platform)
+    except Exception:
+        pass
+    return len(refreshed) + 1, final
 
 
 def run_workflow(project_root: Path) -> subprocess.CompletedProcess[str]:
@@ -399,21 +627,71 @@ class FrontendHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             if self.path == "/api/save":
-                row_number = upsert_masterlist_row(self.masterlist_path, self.read_json())
+                row_number, _ = upsert_masterlist_row(self.masterlist_path, self.read_json())
                 self.send_json({"message": f"Saved row {row_number} to masterlist."})
                 return
             if self.path == "/api/download":
-                row_number = upsert_masterlist_row(self.masterlist_path, self.read_json())
+                row_number, _ = upsert_masterlist_row(self.masterlist_path, self.read_json())
                 result = run_workflow(self.project_root)
                 status = "completed" if result.returncode == 0 else "failed"
                 self.send_json({
-                    "message": f"Saved row {row_number}; workflow {status}. Output folder opened.",
+                    "message": f"Saved row {row_number}; workflow {status}.",
                     "output": (result.stdout + result.stderr).strip(),
                 }, status=200 if result.returncode == 0 else 500)
+                return
+            if self.path == "/api/download-analyze":
+                row_number, record = upsert_masterlist_row(self.masterlist_path, self.read_json())
+                record_id = record.get("Record ID", "")
+                # Run download + analyze via CLI so render mode and full pipeline are used
+                script = self.project_root / "scripts" / "process_shopee_video.py"
+                result = subprocess.run(
+                    [sys.executable, str(script),
+                     "--project-root", str(self.project_root),
+                     "--download-and-analyze-record-id", record_id],
+                    capture_output=True, text=True, check=False,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError((result.stdout + result.stderr).strip())
+                self.send_json({
+                    "message": f"Saved row {row_number} ({record_id}); download + analyze complete.",
+                    "output": (result.stdout + result.stderr).strip(),
+                })
+                return
+            if self.path == "/api/analyze":
+                data = self.read_json()
+                record_id = data.get("record_id", "").strip()
+                if not record_id:
+                    self.send_json({"message": "record_id is required."}, status=400)
+                    return
+                records = read_masterlist(self.masterlist_path)
+                record = find_record_by_id(records, record_id)
+                if not record:
+                    self.send_json({"message": f"Record ID {record_id} not found."}, status=404)
+                    return
+                analyze_row_record(self.project_root, record)
+                write_masterlist(self.masterlist_path, records)
+                self.send_json({"message": f"Analysis complete for {record_id}. analysis-result.md written."})
                 return
             if self.path == "/api/open-output":
                 open_output_folder(self.project_root)
                 self.send_json({"message": "Output folder opened."})
+                return
+            if self.path == "/api/open-file":
+                data = self.read_json()
+                file_path = data.get("path", "")
+                if file_path and Path(file_path).exists():
+                    subprocess.Popen(["explorer.exe", "/select,", file_path])
+                    self.send_json({"message": "File highlighted in Explorer."})
+                else:
+                    self.send_json({"message": "File not found."}, status=404)
+                return
+            if self.path == "/api/run-workflow":
+                result = run_workflow(self.project_root)
+                status = "completed" if result.returncode == 0 else "failed"
+                self.send_json({
+                    "message": f"Workflow {status}.",
+                    "output": (result.stdout + result.stderr).strip(),
+                }, status=200 if result.returncode == 0 else 500)
                 return
             self.send_json({"message": "Not found"}, status=404)
         except Exception as exc:
