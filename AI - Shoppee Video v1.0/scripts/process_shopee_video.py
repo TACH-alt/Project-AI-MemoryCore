@@ -502,6 +502,11 @@ def canonicalize_tiktok_url(
     return url
 
 
+def tiktok_video_id_from_url(url: str) -> str | None:
+    match = re.search(r"/video/(\d+)", urlparse(url).path)
+    return match.group(1) if match else None
+
+
 def unique_path(directory: Path, filename: str) -> Path:
     candidate = directory / safe_filename(filename)
     if not candidate.exists():
@@ -728,7 +733,20 @@ def download_tiktok_thumbnail_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
             images.append(artifact)
         elif artifact.suffix.lower() == ".image":
             images.append(normalize_downloaded_image_artifact(artifact))
-    return images
+    if images:
+        return images
+
+    video_id = tiktok_video_id_from_url(url)
+    if video_id:
+        existing_images = sorted(
+            path for path in raw_dir.iterdir()
+            if path.is_file()
+            and path.stem == video_id
+            and path.suffix.lower() in IMAGE_EXTENSIONS
+        )
+        if existing_images:
+            return existing_images
+    return []
 
 
 def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:

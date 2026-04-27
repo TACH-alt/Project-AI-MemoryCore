@@ -564,3 +564,48 @@ Results:
 35 tests passed
 Download + Analyze complete for ATV-0000001.
 ```
+
+## TikTok Retest - 2026-04-28
+
+- Tested new TikTok link:
+
+```text
+https://www.tiktok.com/@bargainpurchasesofficial/video/7430739715701099783?is_from_webapp=1&sender_device=pc
+```
+
+- Added row:
+  - `ATV-0000002`
+  - Product Name: `Nordic Premium Chair`
+  - Shop Name: `Bargain Purchase`
+- Initial `Save + Download + Analyze` completed and created the right folder/artifacts, but the first readback exposed a rerun bug:
+  - the row state eventually wrote correctly
+  - output folder and analysis files existed
+  - however the photo-mode rerun path skipped `background.m4a`, so the first retest rendered a silent MP4
+- Root cause:
+  - on rerun, the TikTok cover JPG was overwritten in place
+  - `download_tiktok_thumbnail_with_ytdlp()` only looked for newly created files
+  - because the existing JPG path was reused, the workflow treated the thumbnail step as empty and skipped the background-audio follow-up
+- Fix:
+  - added `tiktok_video_id_from_url()`
+  - taught `download_tiktok_thumbnail_with_ytdlp()` to reuse an overwritten canonical image path when the thumbnail already exists
+- Fresh verification:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000002
+```
+
+Results:
+
+```text
+37 tests passed
+Download + Analyze complete for ATV-0000002.
+```
+
+- Final verified state for `ATV-0000002`:
+  - raw:
+    - `7430739715701099783.jpg`
+    - `background.m4a`
+  - edited:
+    - `7430739715701099783_new.mp4`
+  - `ffprobe` confirmed an AAC audio stream exists in the final MP4

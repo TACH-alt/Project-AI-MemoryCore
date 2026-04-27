@@ -77,6 +77,7 @@
 - **Where We Left Off**: Main-workspace TikTok downloader reliability was upgraded and the previously failing TikTok row `ATV-0000001` now completes through `Download + Analyze`.
 - **Where We Left Off**: TikTok photo-mode background audio bug was fixed; the newest `ATV-0000001` edited output now includes an AAC audio stream sourced from `background.m4a`.
 - **Where We Left Off**: The TikTok row has been stabilized into clean canonical outputs, and the local frontend is running again on `127.0.0.1:8765` and `10.10.10.5:8765`.
+- **Where We Left Off**: A second TikTok photo-mode row, `ATV-0000002`, was tested successfully after fixing the thumbnail-overwrite rerun bug; it now keeps `background.m4a` and renders with audio.
 - **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.

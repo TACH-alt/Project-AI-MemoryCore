@@ -32,6 +32,7 @@ from process_shopee_video import (
     safe_filename,
     select_media_urls_for_download,
     strip_query_for_shopee_product_url,
+    tiktok_video_id_from_url,
     update_record,
 )
 
@@ -155,6 +156,12 @@ class HelperTests(unittest.TestCase):
             "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
         )
 
+    def test_tiktok_video_id_from_url_extracts_numeric_id(self):
+        self.assertEqual(
+            tiktok_video_id_from_url("https://www.tiktok.com/@shopdemo/video/7490123456789012345"),
+            "7490123456789012345",
+        )
+
     def test_cleanup_non_media_outputs_removes_audio_only_tiktok_artifacts(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             raw_dir = Path(tmp) / "raw"
@@ -236,6 +243,31 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(len(images), 1)
             self.assertEqual(images[0].suffix.lower(), ".jpg")
             self.assertTrue(images[0].exists())
+
+    def test_download_tiktok_thumbnail_with_ytdlp_reuses_overwritten_existing_image(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            existing = raw_dir / "7490123456789012345.jpg"
+            existing.write_bytes(b"old")
+
+            def fake_run(command, capture_output, text, check):
+                existing.write_bytes(b"\xff\xd8\xff\xe0" + b"updated")
+
+                class Result:
+                    returncode = 0
+                return Result()
+
+            from unittest.mock import patch
+
+            with patch("process_shopee_video.subprocess.run", side_effect=fake_run):
+                images = download_tiktok_thumbnail_with_ytdlp(
+                    "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+                    raw_dir,
+                )
+
+            self.assertEqual(images, [existing])
+            self.assertEqual(existing.read_bytes(), b"\xff\xd8\xff\xe0updated")
 
     def test_download_tiktok_photo_audio_returns_downloaded_native_audio(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
