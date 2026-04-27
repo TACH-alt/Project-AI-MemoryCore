@@ -426,3 +426,23 @@ Result:
 ```text
 46 tests passed
 ```
+
+## Monitoring Claude Updates - 2026-04-27
+
+- After the Codex implementation checkpoint and Claude cherry-pick session, Codex delegated explorer agent `Carson` to read Claude's ongoing main-workspace updates without modifying files.
+- The purpose of this monitoring step is to keep project memory aligned while preserving both:
+  - Claude's active main-workspace progress
+  - the isolated worktree fallback/checkpoint
+- MemoryCore and Obsidian were refreshed again at this point so the current save includes both tracks.
+
+### Carson Findings
+
+- Claude's main-workspace code upgrades are substantial and coherent in:
+  - `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`
+  - `AI - Shoppee Video v1.0/scripts/shoppee_video_frontend.py`
+- Recent output folders and run logs confirm real recent workflow activity.
+- The main workspace still shows partially old live artifacts:
+  - CSV header still on the older live schema
+  - output folders still flat `output/Product-Shop/`
+  - no visible `product-info.md` / `analysis-result.md` generated yet in the new product folders
+- Carson was closed after this snapshot was saved.

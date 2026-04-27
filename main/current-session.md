@@ -7,9 +7,9 @@
 - **Format Reference**: See main/session-format.md for rebuild structure
 
 ## Session Context
-**Session Type**: Work (system setup)
+**Session Type**: Work (code implementation + documentation)
 **Current Project**: AI - Shoppee Video v1.0 automation
-**Status**: Active
+**Status**: Cherry-pick complete — smoke test pending
 **Time**: 2026-04-27
 
 ## Time-Aware Session Context
@@ -20,18 +20,18 @@
 - **Behavior Focus**: Save point / project continuity
 
 ## Current Focus
-- **Primary Task**: Finalizing and saving the AI - Shoppee Video v1.0 analysis and TikTok upgrade state
+- **Primary Task**: Cherry-pick from codex/analysis-tiktok worktree into main — COMPLETE. Smoke test is the next step.
 - **Technical Context**: Windows PC, Cowork mode, files under C:\Users\Legend\Documents\Claude\Projects\MemoryCore
-- **Progress**: The analysis lane and public TikTok support are implemented in an isolated worktree branch, verified, and documented for follow-up review.
+- **Progress**: All analysis + TikTok + folder-structure features have been selectively cherry-picked into both `process_shopee_video.py` and `shoppee_video_frontend.py`. Render modes, audio fix, and mobile UX were preserved. No live test yet.
 
 ## Working Memory (RAM)
 *Temporary storage - cleared when session ends or when 500-line limit is reached*
 
 ### Active Context
-- **Current Topic**: Shopee + TikTok affiliate automation with stable row identity, product-folder documentation, manual/direct analysis actions, and Obsidian-backed project memory.
-- **Immediate Goals**: Save the latest implementation checkpoint into MemoryCore and the Legendary vault before Claude reviews or improves the work.
-- **Recent Progress**: Completed the isolated worktree implementation branch `codex/analysis-tiktok`, including row-targeted frontend analyze actions, public TikTok single-video support, and refreshed project documentation.
-- **Next Steps**: Keep this checkpoint saved, let Claude review/improve if needed, then decide how to merge the worktree branch back into the main project.
+- **Current Topic**: Shopee + TikTok affiliate automation with stable row identity, platform-based output folders, product-info.md, analysis-result.md, and full frontend analyze workflow.
+- **Immediate Goals**: Run smoke test — start frontend, save a Shopee row, verify `output/Shopee/<Shop>/<Product>/` structure and product-info.md. Then test TikTok short URL `https://vt.tiktok.com/ZS9hjGD43/`.
+- **Recent Progress**: Cherry-pick of all Codex analysis/TikTok features into main branch completed on 2026-04-27. Both scripts updated. Cowork memory saved.
+- **Next Steps**: Smoke test (Task #13), then git commit the cherry-pick changes to the main branch. In parallel, Codex delegated explorer agent `Carson` to read Claude's ongoing main-workspace updates without modifying them.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -56,10 +56,16 @@
 - Task 1 of the future-improvements plan is now complete on 2026-04-24. The frontend supports private-network access via `-Lan`, prints both localhost and LAN URLs, and manual verification showed `http://10.10.10.5:8766/` as the LAN address during testing.
 - New workflow-planning note created on 2026-04-24: `AI - Video Workflow/Shopee Link and Media Analysis Workflow.md`.
 - The new note defines a second workflow lane for `Analyze`, `Open Analysis`, and `Open Handoff`, with outputs such as `product-summary.md`, `media-analysis.md`, and `hook-pack.md`.
-- As of 2026-04-27, the analysis and TikTok upgrade is implemented in the isolated worktree branch `codex/analysis-tiktok`.
-- That branch added `Record ID`, `Analysis Done`, `product-info.md`, `analysis-result.md`, row-targeted frontend actions, and public TikTok single-video URL support.
-- Latest verification inside the worktree: `python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v` -> `46 tests passed`.
-- The current checkpoint is intentionally separated from Claude's main-workspace frontend/render changes.
+- As of 2026-04-27 (cherry-pick session), analysis + TikTok features have been selectively integrated from `codex/analysis-tiktok` worktree into the main scripts — render modes, audio fix, and mobile CSS preserved.
+- New features in main: Record ID (ASV/ATV), Analysis Done, platform-based output folders, product-info.md, analysis-result.md, analyze workflow, vt.tiktok.com short URL support.
+- Frontend: Record ID field, 🔍 Analyze button, Save+Download+Analyze button, per-row analyze, Analysis Done column.
+- Cowork memory system initialized: 5 memory files under spaces/b5b6b1c2.../memory/.
+- Smoke test (Task #13) is the remaining step before production.
+- Codex delegated explorer `Carson` to keep track of Claude's ongoing main-workspace changes while preserving the separate worktree checkpoint and avoiding overwrite risk.
+- Carson's snapshot found that Claude's script/frontend upgrades are substantial and real, but the live masterlist/output artifacts are still partly old-state:
+  - CSV header still on the old 11-column live schema
+  - output folders still flat `output/Product-Shop/`
+  - no generated `product-info.md` or `analysis-result.md` yet in the new product folders
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*

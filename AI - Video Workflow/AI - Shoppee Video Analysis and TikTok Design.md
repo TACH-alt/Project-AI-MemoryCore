@@ -107,3 +107,24 @@ Result:
 - Implementation plan written.
 - Core implementation completed in the isolated worktree branch.
 - Main workspace remains untouched for Claude's in-progress changes.
+
+## Monitoring Note - 2026-04-27
+
+- Claude's ongoing main-workspace updates are being tracked separately from the isolated worktree implementation checkpoint.
+- Codex delegated explorer agent `Carson` to read and summarize Claude's current main-workspace changes without editing them.
+- This keeps the project memory aligned across:
+  - isolated worktree implementation state
+  - newer main-branch cherry-pick state
+  - Obsidian mirror notes
+
+## Carson Snapshot - 2026-04-27
+
+- Carson completed the read and was closed after reporting.
+- Current main-workspace nuance:
+  - Claude's script/frontend upgrades are real and substantial.
+  - Recent output folders and logs show actual runs.
+  - The live workspace is still only partially migrated to the new model:
+    - masterlist header still reflects the older live schema
+    - output folders still appear in older flat `output/Product-Shop/` form
+    - `product-info.md` and `analysis-result.md` do not yet appear in those new main-workspace product folders
+- This means the code path is ahead of the currently exercised artifact trail in the main workspace.
