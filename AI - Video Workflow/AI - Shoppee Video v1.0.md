@@ -446,3 +446,13 @@ Result:
   - output folders still flat `output/Product-Shop/`
   - no visible `product-info.md` / `analysis-result.md` generated yet in the new product folders
 - Carson was closed after this snapshot was saved.
+
+## Testing Monitor Deployment - 2026-04-27
+
+- Codex deployed new read-only monitor agent `Lagrange` to watch Claude's ongoing testing in the main workspace.
+- Monitoring focus:
+  - smoke-test completion
+  - live schema migration in the masterlist
+  - transition from flat output folders to the new grouped model
+  - creation of `product-info.md` and `analysis-result.md`
+- Thread heartbeat automation also created so this thread keeps checking every 30 minutes without manual follow-up.

@@ -66,6 +66,8 @@
   - CSV header still on the old 11-column live schema
   - output folders still flat `output/Product-Shop/`
   - no generated `product-info.md` or `analysis-result.md` yet in the new product folders
+- Deployed new read-only monitor agent `Lagrange` on 2026-04-27 to watch the main-workspace testing/smoke-test progress for `AI - Shoppee Video v1.0`.
+- Created thread heartbeat automation `Monitor AI Video Testing` to re-check every 30 minutes and report only meaningful changes or completion signals.
 
 ## Session Recap (For AI Restart)
 *Quick summary when AI loads after close/reopen*
