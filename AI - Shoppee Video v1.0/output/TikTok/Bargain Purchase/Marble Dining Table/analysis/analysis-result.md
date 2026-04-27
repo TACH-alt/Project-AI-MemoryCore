@@ -8,7 +8,7 @@
 | Shop Name | Bargain Purchase |
 | Product Link | https://www.tiktok.com/@bargainpurchasesofficial/video/7129084799339351323 |
 | Source Type | Auto |
-| Analyzed File | 7129084799339351323-3_new.mp4 |
+| Analyzed File | 7129084799339351323_new.mp4 |
 
 ## Technical Summary
 

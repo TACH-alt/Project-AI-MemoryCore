@@ -19,5 +19,5 @@
 | Type | Count |
 |---|---|
 | Videos downloaded | 0 |
-| Images downloaded | 3 |
-| Latest output file | C:\Users\Legend\Documents\Claude\Projects\MemoryCore\AI - Shoppee Video v1.0\output\TikTok\Bargain Purchase\Marble Dining Table\edited\7129084799339351323-3_new.mp4 |
+| Images downloaded | 1 |
+| Latest output file | C:\Users\Legend\Documents\Claude\Projects\MemoryCore\AI - Shoppee Video v1.0\output\TikTok\Bargain Purchase\Marble Dining Table\edited\7129084799339351323_new.mp4 |

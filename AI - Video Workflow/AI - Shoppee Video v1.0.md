@@ -530,3 +530,37 @@ Result:
   - newest edited output:
     - `7129084799339351323-3_new.mp4`
   - `ffprobe` confirmed the rendered file now has an AAC audio stream
+
+## Running State - 2026-04-27
+
+- Tightened rerun behavior for TikTok photo-mode rows:
+  - thumbnail normalization now replaces the canonical image file instead of generating `-2` / `-3` artifacts
+  - edited output rendering now replaces the canonical `_new.mp4` instead of creating duplicate suffixed renders
+  - `yt-dlp` thumbnail and background-audio commands now use `--force-overwrites`
+- Cleaned old duplicate TikTok artifacts from:
+  - `output/TikTok/Bargain Purchase/Marble Dining Table/raw/`
+  - `output/TikTok/Bargain Purchase/Marble Dining Table/edited/`
+- Final steady-state after rerun:
+  - raw:
+    - `7129084799339351323.jpg`
+    - `background.m4a`
+  - edited:
+    - `7129084799339351323_new.mp4`
+- `product-info.md` media summary now reflects the cleaned state:
+  - `Images downloaded = 1`
+- Frontend is live again and reachable at:
+  - `http://127.0.0.1:8765/`
+  - `http://10.10.10.5:8765/`
+- Fresh verification:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000001
+```
+
+Results:
+
+```text
+35 tests passed
+Download + Analyze complete for ATV-0000001.
+```

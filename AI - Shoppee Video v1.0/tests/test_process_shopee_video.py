@@ -28,6 +28,7 @@ from process_shopee_video import (
     normalize_downloaded_image_artifact,
     page_request_headers,
     REQUIRED_COLUMNS,
+    replace_path,
     safe_filename,
     select_media_urls_for_download,
     strip_query_for_shopee_product_url,
@@ -196,6 +197,19 @@ class HelperTests(unittest.TestCase):
             self.assertTrue(normalized.exists())
             self.assertFalse(artifact.exists())
 
+    def test_normalize_downloaded_image_artifact_replaces_existing_target(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            artifact = Path(tmp) / "thumb.image"
+            existing = Path(tmp) / "thumb.jpg"
+            existing.write_bytes(b"old")
+            artifact.write_bytes(b"\xff\xd8\xff\xe0" + b"new-bytes")
+
+            normalized = normalize_downloaded_image_artifact(artifact)
+
+            self.assertEqual(normalized, existing)
+            self.assertEqual(existing.read_bytes(), b"\xff\xd8\xff\xe0new-bytes")
+            self.assertFalse(artifact.exists())
+
     def test_download_tiktok_thumbnail_with_ytdlp_returns_normalized_image(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             raw_dir = Path(tmp) / "raw"
@@ -203,6 +217,7 @@ class HelperTests(unittest.TestCase):
 
             def fake_run(command, capture_output, text, check):
                 self.assertIn("--write-thumbnail", command)
+                self.assertIn("--force-overwrites", command)
                 self.assertIn(str(raw_dir), command)
                 (raw_dir / "7129084799339351323.image").write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 8)
 
@@ -230,6 +245,7 @@ class HelperTests(unittest.TestCase):
             def fake_run(command, capture_output, text, check):
                 self.assertIn("--format", command)
                 self.assertIn("bestaudio", command)
+                self.assertIn("--force-overwrites", command)
                 self.assertNotIn("-x", command)
                 (raw_dir / "background.m4a").write_bytes(b"audio")
 
@@ -257,6 +273,18 @@ class HelperTests(unittest.TestCase):
             audio.write_bytes(b"audio")
 
             self.assertEqual(find_background_audio(raw_dir), audio)
+
+    def test_replace_path_overwrites_existing_file(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            base = Path(tmp)
+            target = base / "clip.mp4"
+            target.write_bytes(b"old")
+
+            resolved = replace_path(base, "clip.mp4")
+            resolved.write_bytes(b"new")
+
+            self.assertEqual(resolved, target)
+            self.assertEqual(target.read_bytes(), b"new")
 
     def test_filter_media_urls_skips_site_chrome_assets(self):
         urls = filter_media_urls(

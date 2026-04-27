@@ -513,6 +513,13 @@ def unique_path(directory: Path, filename: str) -> Path:
     raise FileExistsError(f"Could not create unique filename for {candidate}")
 
 
+def replace_path(directory: Path, filename: str) -> Path:
+    target = directory / safe_filename(filename)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.unlink(missing_ok=True)
+    return target
+
+
 def filename_from_url(url: str, fallback: str = "media") -> str:
     parsed = urlparse(url)
     name = Path(unquote(parsed.path)).name
@@ -692,7 +699,7 @@ def normalize_downloaded_image_artifact(path: Path) -> Path:
     if path.suffix.lower() != ".image":
         return path
     extension = infer_image_extension(path) or ".jpg"
-    target = unique_path(path.parent, f"{path.stem}{extension}")
+    target = replace_path(path.parent, f"{path.stem}{extension}")
     path.rename(target)
     return target
 
@@ -703,6 +710,7 @@ def download_tiktok_thumbnail_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
         *build_ytdlp_prefix(),
         "--skip-download",
         "--write-thumbnail",
+        "--force-overwrites",
         "--paths",
         str(raw_dir),
         "--output",
@@ -737,6 +745,7 @@ def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:
         *build_ytdlp_prefix(),
         "--no-playlist",
         "--format", "bestaudio",
+        "--force-overwrites",
         "--paths", str(raw_dir),
         "--output", "background.%(ext)s",
         url,
@@ -906,7 +915,7 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: st
     else:
         return None
 
-    output_path = unique_path(edited_dir, output_name)
+    output_path = replace_path(edited_dir, output_name)
     command = build_ffmpeg_command(
         ffmpeg, raw_path, output_path, caption,
         render_mode=render_mode, background_audio=background_audio,
