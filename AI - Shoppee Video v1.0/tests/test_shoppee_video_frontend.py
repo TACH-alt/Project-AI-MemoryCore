@@ -43,14 +43,14 @@ class FrontendTests(unittest.TestCase):
     def test_upsert_masterlist_row_appends_then_updates_by_product_link(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
             path = Path(tmp) / "master.csv"
-            first_row = upsert_masterlist_row(path, {
+            first_row_number, first_record = upsert_masterlist_row(path, {
                 "Date": "2026-04-23",
                 "Product Link": "https://example.com/video.mp4",
                 "Product Name": "Mini Fan",
                 "Shop Name": "Cool Shop",
                 "Source Type": "Approved Media",
             })
-            second_row = upsert_masterlist_row(path, {
+            second_row_number, second_record = upsert_masterlist_row(path, {
                 "Date": "2026-04-24",
                 "Product Link": "https://example.com/video.mp4",
                 "Product Name": "Mini Fan Updated",
@@ -61,9 +61,11 @@ class FrontendTests(unittest.TestCase):
             with path.open("r", newline="", encoding="utf-8-sig") as handle:
                 rows = list(csv.DictReader(handle))
 
-            self.assertEqual(first_row, 2)
-            self.assertEqual(second_row, 2)
+            self.assertEqual(first_row_number, 2)
+            self.assertEqual(second_row_number, 2)
             self.assertEqual(len(rows), 1)
+            self.assertEqual(first_record["Record ID"], "ASV-0000001")
+            self.assertEqual(second_record["Record ID"], "ASV-0000001")
             self.assertEqual(rows[0]["Product Name"], "Mini Fan Updated")
             self.assertEqual(rows[0]["Done"], "TRUE")
 

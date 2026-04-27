@@ -456,3 +456,44 @@ Result:
   - transition from flat output folders to the new grouped model
   - creation of `product-info.md` and `analysis-result.md`
 - Thread heartbeat automation also created so this thread keeps checking every 30 minutes without manual follow-up.
+
+## TikTok Downloader Upgrade - 2026-04-27
+
+- Investigated the failing TikTok row against SnapTik behavior and local `yt-dlp` output.
+- Confirmed the root cause in the live environment:
+  - `yt-dlp` could only see an `audio` format for the TikTok URL.
+  - the machine was missing a supported impersonation backend for `yt-dlp`
+  - the tested TikTok post is a photo-mode post, not a normal video post
+- Installed compatible `curl_cffi` support for `yt-dlp`:
+  - `curl_cffi==0.14.0`
+- Upgraded `process_shopee_video.py` to:
+  - canonicalize TikTok short links through TikTok `oEmbed`
+  - force merged video output attempts first for real TikTok videos
+  - clean up audio-only leftovers like `.m4a`
+  - fall back to TikTok thumbnail capture when a post exposes only audio/cover media
+  - normalize `.image` thumbnail artifacts into real image extensions like `.jpg`
+- Result for live row `ATV-0000001`:
+  - completed successfully through `Download + Analyze`
+  - wrote `product-info.md`
+  - wrote `analysis/analysis-result.md`
+  - created edited output:
+    - `output/TikTok/Bargain Purchase/Marble Dining Table/edited/7129084799339351323_new.mp4`
+- Masterlist state after retest:
+  - `Status = Edited`
+  - `Done = TRUE`
+  - `Analysis Done = TRUE`
+- Verification after code changes:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+30 tests passed
+```
+
+- One small runtime warning still appeared after success:
+  - a `zipfile.ZipFile.__del__` cleanup warning on Python 3.14
+  - workflow result still completed successfully

@@ -74,10 +74,12 @@
 - **Previous Session Summary**: MemoryCore was personalized for Legend, Tier 1-4 features are recorded as installed in `master-memory.md`, and the stale Tier 1-only session state was corrected.
 - **Where We Left Off**: `AI - Shoppee Video v1.0` local automation was created and committed. The main workspace now contains the scaffold, masterlist CSV/XLSX, Python processor, PowerShell runner, tests, design spec, implementation plan, and Obsidian project note.
 - **Where We Left Off**: The analysis and TikTok implementation is complete in the isolated worktree branch and has been documented and mirrored to Obsidian.
+- **Where We Left Off**: Main-workspace TikTok downloader reliability was upgraded and the previously failing TikTok row `ATV-0000001` now completes through `Download + Analyze`.
 - **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.
 - **Review Rule**: Do not overwrite Claude's in-progress main-workspace code; use the isolated worktree branch as the safe implementation checkpoint.
+- **TikTok Rule**: TikTok photo-mode posts may expose audio plus thumbnail media instead of an mp4; the workflow now falls back to thumbnail capture and still renders an edited output.
 
 ## Session Achievements
 - Repo cloned successfully via user-run PowerShell (git path resolution handled).
@@ -97,7 +99,8 @@
 ## Quick Context for Next Session
 - **Where We Left Off**: `AI - Shoppee Video v1.0` is ready for first real row testing after FFmpeg is installed or added to PATH.
 - **What's Working**: CSV/XLSX masterlist template, pending-row loader, direct media downloader, best-effort page media discovery, output folder naming, caption format, `_new` filename behavior, unit tests, and dry-run runner.
-- **What Needs Attention**: FFmpeg is not on PATH, so actual edited video rendering will be blocked until FFmpeg is installed. Direct Google Sheet API creation/update is deferred until a connected Sheets API/MCP surface is available.
+- **What's Working**: Shopee full-product scraping, row-targeted analysis, TikTok public URL handling, and TikTok photo-mode thumbnail fallback now complete successfully in the main workspace.
+- **What Needs Attention**: There is still a small `zipfile.ZipFile.__del__` cleanup warning after a successful TikTok `Download + Analyze` run on Python 3.14. Direct Google Sheet API creation/update is still deferred until a connected Sheets API/MCP surface is available.
 
 ## Session Lifecycle
 

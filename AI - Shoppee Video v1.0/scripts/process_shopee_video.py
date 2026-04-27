@@ -14,7 +14,7 @@ import subprocess
 import sys
 from typing import Iterable
 from urllib.error import HTTPError, URLError
-from urllib.parse import unquote, urljoin, urlparse, urlsplit, urlunsplit
+from urllib.parse import quote, unquote, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 
@@ -280,19 +280,39 @@ def build_ytdlp_command(
     python_executable: str | None = None,
     allow_path_lookup: bool = True,
 ) -> list[str]:
-    executable = ytdlp_path
-    if allow_path_lookup:
-        executable = executable or find_executable("yt-dlp", python_user_scripts_candidates("yt-dlp.exe"))
-    prefix = [executable] if executable else [python_executable or sys.executable, "-m", "yt_dlp"]
-    return [
+    prefix = build_ytdlp_prefix(
+        ytdlp_path=ytdlp_path,
+        python_executable=python_executable,
+        allow_path_lookup=allow_path_lookup,
+    )
+    command = [
         *prefix,
         "--no-playlist",
         "--paths",
         str(raw_dir),
         "--output",
         "%(title).80s.%(ext)s",
-        url,
     ]
+    if is_tiktok_video_url(url):
+        command.extend([
+            "--format",
+            "bv*+ba/b",
+            "--merge-output-format",
+            "mp4",
+        ])
+    command.append(url)
+    return command
+
+
+def build_ytdlp_prefix(
+    ytdlp_path: str | None = None,
+    python_executable: str | None = None,
+    allow_path_lookup: bool = True,
+) -> list[str]:
+    executable = ytdlp_path
+    if allow_path_lookup:
+        executable = executable or find_executable("yt-dlp", python_user_scripts_candidates("yt-dlp.exe"))
+    return [executable] if executable else [python_executable or sys.executable, "-m", "yt_dlp"]
 
 
 def default_value_for_column(column: str) -> str:
@@ -454,6 +474,30 @@ def request_url(url: str, headers: dict[str, str] | None = None):
     return urlopen(request, timeout=45)
 
 
+def canonicalize_tiktok_url(
+    url: str,
+    request_fn=request_url,
+) -> str:
+    if not is_tiktok_video_url(url):
+        return url
+    parsed = urlparse(url)
+    if "/video/" in parsed.path and parsed.netloc.lower() != "vt.tiktok.com":
+        return url
+
+    oembed_url = f"https://www.tiktok.com/oembed?url={quote(url, safe='')}"
+    try:
+        with request_fn(oembed_url, request_headers(oembed_url)) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return url
+
+    for candidate in (payload.get("html", ""), payload.get("author_url", "")):
+        match = re.search(r"https://www\.tiktok\.com/@[^\"'?\s]+/video/\d+", candidate)
+        if match:
+            return match.group(0)
+    return url
+
+
 def unique_path(directory: Path, filename: str) -> Path:
     candidate = directory / safe_filename(filename)
     if not candidate.exists():
@@ -588,12 +632,85 @@ def filter_media_urls(urls: Iterable[str]) -> list[str]:
 def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
     raw_dir.mkdir(parents=True, exist_ok=True)
     before = {path.resolve() for path in raw_dir.iterdir()} if raw_dir.exists() else set()
-    command = build_ytdlp_command(url, raw_dir)
+    canonical_url = canonicalize_tiktok_url(url)
+    command = build_ytdlp_command(canonical_url, raw_dir)
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         return []
     after = {path.resolve() for path in raw_dir.iterdir()}
-    return sorted(path for path in after - before if path.suffix.lower() in MEDIA_EXTENSIONS)
+    media = sorted(path for path in after - before if path.suffix.lower() in MEDIA_EXTENSIONS)
+    if media:
+        cleanup_non_media_outputs(raw_dir)
+        return media
+    if is_tiktok_video_url(canonical_url):
+        thumbnails = download_tiktok_thumbnail_with_ytdlp(canonical_url, raw_dir)
+        cleanup_non_media_outputs(raw_dir)
+        return thumbnails
+    cleanup_non_media_outputs(raw_dir)
+    return []
+
+
+def cleanup_non_media_outputs(directory: Path) -> list[Path]:
+    removed: list[Path] = []
+    if not directory.exists():
+        return removed
+    for path in directory.iterdir():
+        if path.is_dir():
+            continue
+        if path.suffix.lower() in MEDIA_EXTENSIONS:
+            continue
+        path.unlink(missing_ok=True)
+        removed.append(path)
+    return removed
+
+
+def infer_image_extension(path: Path) -> str | None:
+    with path.open("rb") as handle:
+        header = handle.read(16)
+    if header.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        return ".gif"
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def normalize_downloaded_image_artifact(path: Path) -> Path:
+    if path.suffix.lower() != ".image":
+        return path
+    extension = infer_image_extension(path) or ".jpg"
+    target = unique_path(path.parent, f"{path.stem}{extension}")
+    path.rename(target)
+    return target
+
+
+def download_tiktok_thumbnail_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
+    before = {path.resolve() for path in raw_dir.iterdir()} if raw_dir.exists() else set()
+    command = [
+        *build_ytdlp_prefix(),
+        "--skip-download",
+        "--write-thumbnail",
+        "--paths",
+        str(raw_dir),
+        "--output",
+        "%(id)s.%(ext)s",
+        url,
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return []
+    after = {path.resolve() for path in raw_dir.iterdir()}
+    created = [Path(path) for path in sorted(after - before)]
+    images: list[Path] = []
+    for artifact in created:
+        if artifact.suffix.lower() in IMAGE_EXTENSIONS:
+            images.append(artifact)
+        elif artifact.suffix.lower() == ".image":
+            images.append(normalize_downloaded_image_artifact(artifact))
+    return images
 
 
 def copy_local_media(source: Path, target_dir: Path) -> Path:

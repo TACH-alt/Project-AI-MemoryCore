@@ -141,3 +141,21 @@ Result:
 - Supporting thread heartbeat automation created:
   - `Monitor AI Video Testing`
   - active every 30 minutes
+
+## TikTok Research Outcome - 2026-04-27
+
+- SnapTik-style research confirmed that successful TikTok capture is typically handled server-side, with URL normalization and download relays.
+- For this local workflow, the practical fix path was:
+  - resolve TikTok short links to canonical long-form URLs
+  - improve `yt-dlp` video extraction attempts
+  - add a local fallback for TikTok photo-mode posts
+- The tested live TikTok row turned out to be a photo-mode post:
+  - webpage exposed empty `playAddr` / `downloadAddr`
+  - `yt-dlp` only surfaced an audio track plus thumbnails
+- The workflow was upgraded to treat this as usable media instead of a dead-end failure:
+  - thumbnail capture is downloaded
+  - `.image` artifacts are normalized to image extensions
+  - the image can still flow into the existing caption/render/analyze pipeline
+- This means TikTok support is now broader than “mp4 only”:
+  - real video posts still try direct video download
+  - photo-mode posts can still produce a usable edited output from image media
