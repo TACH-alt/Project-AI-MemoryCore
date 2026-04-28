@@ -14,10 +14,14 @@ from process_shopee_video import (
     build_product_folder_name,
     canonicalize_tiktok_url,
     cleanup_non_media_outputs,
+    download_with_ytdlp,
+    download_tiktok_bundle,
     derive_output_name,
     download_tiktok_photo_audio,
     download_tiktok_thumbnail_with_ytdlp,
     ensure_masterlist_columns,
+    extract_tiktok_media_bundle_from_html,
+    extension_from_content_type,
     extract_media_urls_from_html,
     find_background_audio,
     filter_media_urls,
@@ -54,6 +58,9 @@ class HelperTests(unittest.TestCase):
         self.assertTrue(is_direct_media_url("https://example.com/video.mp4?download=1"))
         self.assertTrue(is_direct_media_url("https://example.com/image.jpeg"))
         self.assertFalse(is_direct_media_url("https://shopee.com.my/product/123"))
+
+    def test_extension_from_content_type_handles_audio_types(self):
+        self.assertEqual(extension_from_content_type("audio/mp4"), ".m4a")
 
     def test_load_rows_reads_pending_csv(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
@@ -296,6 +303,132 @@ class HelperTests(unittest.TestCase):
             self.assertIsNotNone(audio)
             self.assertEqual(audio.name, "background.m4a")
             self.assertTrue(audio.exists())
+
+    def test_extract_tiktok_media_bundle_from_html_prefers_video_urls(self):
+        body = """
+        <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+        {"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":{
+            "id":"7490123456789012345",
+            "video":{"playAddr":"https://cdn.example.com/play.mp4","downloadAddr":"https://cdn.example.com/download.mp4"},
+            "music":{"playUrl":"https://cdn.example.com/music.m4a"}
+        }}}}}
+        </script>
+        """
+
+        bundle = extract_tiktok_media_bundle_from_html(
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+            body,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(bundle["video_id"], "7490123456789012345")
+        self.assertEqual(
+            bundle["video_urls"],
+            ["https://cdn.example.com/download.mp4", "https://cdn.example.com/play.mp4"],
+        )
+        self.assertEqual(bundle["audio_url"], "https://cdn.example.com/music.m4a")
+
+    def test_extract_tiktok_media_bundle_from_html_handles_photo_mode(self):
+        body = """
+        <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+        {"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":{
+            "id":"7490123456789012345",
+            "video":{"playAddr":"","downloadAddr":"","originCover":"https://cdn.example.com/origin.image",
+                     "zoomCover":{"240":"https://cdn.example.com/240.jpeg","960":"https://cdn.example.com/960.jpeg"}},
+            "music":{"playUrl":"https://cdn.example.com/music.m4a"}
+        }}}}}
+        </script>
+        """
+
+        bundle = extract_tiktok_media_bundle_from_html(
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+            body,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "photo_mode")
+        self.assertEqual(bundle["video_id"], "7490123456789012345")
+        self.assertEqual(
+            bundle["image_urls"],
+            ["https://cdn.example.com/origin.image"],
+        )
+        self.assertEqual(bundle["audio_url"], "https://cdn.example.com/music.m4a")
+
+    def test_download_tiktok_bundle_downloads_photo_mode_images_and_audio(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            bundle = {
+                "kind": "photo_mode",
+                "video_id": "7490123456789012345",
+                "image_urls": [
+                    "https://cdn.example.com/one.jpeg",
+                    "https://cdn.example.com/two.jpeg",
+                ],
+                "audio_url": "https://cdn.example.com/music.m4a",
+            }
+
+            created: list[Path] = []
+
+            def fake_download(url, target_dir, fallback_name="media"):
+                suffix = ".m4a" if "music" in url else ".jpg"
+                target = target_dir / f"{fallback_name}{suffix}"
+                target.write_bytes(b"demo")
+                created.append(target)
+                return target
+
+            from unittest.mock import patch
+
+            with patch("process_shopee_video.download_url", side_effect=fake_download):
+                media = download_tiktok_bundle(bundle, raw_dir)
+
+            self.assertEqual(
+                [path.name for path in media],
+                ["7490123456789012345.jpg", "7490123456789012345-2.jpg"],
+            )
+            self.assertTrue(all(path.exists() for path in media))
+            self.assertTrue((raw_dir / "background.m4a").exists())
+
+    def test_download_with_ytdlp_replaces_tiktok_thumbnail_result_with_structured_bundle(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+
+            def fake_run(command, capture_output, text, check):
+                (raw_dir / "thumb.jpg").write_bytes(b"thumb")
+
+                class Result:
+                    returncode = 0
+                return Result()
+
+            def fake_bundle(url):
+                return {
+                    "kind": "photo_mode",
+                    "video_id": "7490123456789012345",
+                    "image_urls": ["https://cdn.example.com/one.jpeg"],
+                    "audio_url": "https://cdn.example.com/music.m4a",
+                }
+
+            def fake_download_bundle(bundle, directory):
+                target = directory / "7490123456789012345-1.jpg"
+                target.write_bytes(b"better")
+                return [target]
+
+            from unittest.mock import patch
+
+            with (
+                patch("process_shopee_video.subprocess.run", side_effect=fake_run),
+                patch("process_shopee_video.discover_tiktok_media_bundle", side_effect=fake_bundle),
+                patch("process_shopee_video.download_tiktok_bundle", side_effect=fake_download_bundle),
+            ):
+                media = download_with_ytdlp(
+                    "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+                    raw_dir,
+                )
+
+            self.assertEqual([path.name for path in media], ["7490123456789012345-1.jpg"])
+            self.assertFalse((raw_dir / "thumb.jpg").exists())
 
     def test_find_background_audio_prefers_existing_supported_file(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:

@@ -31,7 +31,9 @@ should activate.
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
+| `legend` | `Legend`, `access MemoryCore`, `run AI personnel named Legend` | Restore the MemoryCore persona and current session context |
 | `save-memory` | `save`, `save memory`, `update memory`, significant new info | Persist new preferences/decisions/milestones to MemoryCore files |
+| `tiktok-media-extraction` | TikTok affiliate download failures, photo-mode confusion, thumbnail-only captures | Classify TikTok post type and recover the best public media path without guessing |
 
 ## Adding New Skills
 
@@ -58,8 +60,10 @@ legend-skills/
 ├── .claude-plugin/
 │   └── plugin.json         # Plugin identity (Claude Code manifest)
 ├── skills/
+│   ├── legend/
+│   │   └── SKILL.md        # MemoryCore persona restoration
 │   └── save-memory/
-│       └── SKILL.md        # Starter skill
+│       └── SKILL.md        # Memory persistence skill
 ├── skill-format.md         # Permanent template reference (copy when writing new skills)
 └── README.md               # This file
 ```

@@ -259,6 +259,107 @@ AI - Shoppee Video v1.0/output/
 
 ## LAN Frontend Upgrade - 2026-04-24
 
+## TikTok Structured Fallback Upgrade - 2026-04-28
+
+### What Changed
+
+- Added a structured TikTok page-data fallback on top of the existing `yt-dlp` path.
+- The workflow now parses TikTok's `__UNIVERSAL_DATA_FOR_REHYDRATION__` payload to classify a public post as:
+  - direct video post
+  - photo-mode post
+- Added direct bundle recovery for TikTok page assets:
+  - direct video URL when TikTok exposes one
+  - best photo-mode image asset
+  - background audio URL from TikTok page data
+- Extended content-type handling so TikTok music URLs without file extensions still save as audio files such as `.m4a`.
+- Tightened photo-mode reruns:
+  - clean raw image artifacts before replacing them
+  - clean stale edited mp4 outputs before rerender
+  - keep canonical naming stable for reruns
+
+### Root Cause Learned
+
+- Some public TikTok links that look like "videos" are actually photo-mode posts.
+- `yt-dlp -F` can show only an `audio` stream for those posts even when the web page still contains usable image and music assets.
+- Our earlier fallback was too shallow:
+  - it accepted low-fidelity JPG output from `yt-dlp`
+  - it did not always promote better page-derived assets
+  - a rename helper could delete a correctly named image and leave a dead path behind
+
+### Live Verification
+
+Smoke-tested and rerun successfully for:
+
+```text
+ATV-0000003
+https://vt.tiktok.com/ZS9ST61G4/
+```
+
+Observed bundle classification:
+
+```text
+kind=photo_mode
+video_urls=[]
+image_urls=[best photo asset]
+audio_url=<TikTok music CDN URL>
+```
+
+Final product folder state:
+
+```text
+AI - Shoppee Video v1.0/output/TikTok/Bargain Purchase/Massage Gaming Chair/
+  product-info.md
+  raw/
+    7429146118933564690.jpg
+    background.m4a
+  edited/
+    7429146118933564690_new.mp4
+  analysis/
+    analysis-result.md
+```
+
+Audio verification:
+
+```text
+ffprobe confirmed AAC audio stream in 7429146118933564690_new.mp4
+```
+
+### Code + Test Result
+
+- Added structured TikTok bundle parsing and recovery in:
+  - `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`
+- Added new regression tests covering:
+  - TikTok page-data parsing
+  - audio content-type mapping
+  - bundle download file survival
+  - structured fallback replacing low-fidelity TikTok JPG results
+
+Verification command:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+42 tests passed
+```
+
+### Skill Update
+
+Created a reusable local skill:
+
+```text
+plugins/legend-skills/skills/tiktok-media-extraction/SKILL.md
+```
+
+Purpose:
+
+- classify TikTok public posts before assuming a download failure
+- distinguish direct video versus photo-mode
+- preserve stable rerun artifacts and audio verification discipline
+
 Implemented:
 
 - Added LAN-friendly frontend URL generation in `shoppee_video_frontend.py`.

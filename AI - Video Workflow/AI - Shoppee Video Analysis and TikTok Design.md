@@ -159,3 +159,43 @@ Result:
 - This means TikTok support is now broader than “mp4 only”:
   - real video posts still try direct video download
   - photo-mode posts can still produce a usable edited output from image media
+## TikTok Structured Fallback Result - 2026-04-28
+
+- Upgraded the main-workspace TikTok path beyond plain `yt-dlp` fallback.
+- Added structured parsing of TikTok page hydration data from `__UNIVERSAL_DATA_FOR_REHYDRATION__`.
+- New extraction rule:
+  - if `yt-dlp` returns a real video, keep it
+  - if TikTok returns image-only media, promote the structured page bundle before accepting the low-fidelity thumbnail path
+- Structured bundle support now covers:
+  - direct video URLs when `downloadAddr` or `playAddr` is exposed
+  - one best photo-mode image asset when direct video is absent
+  - direct music/audio URL recovery
+- Fixed a real regression during this upgrade:
+  - a rename helper could delete an already-correct TikTok image output and leave only a dead path in memory
+- Tightened rerun hygiene too:
+  - clear stale raw image assets before redownloading photo-mode bundles
+  - clear stale edited outputs before rerendering photo-mode rows
+
+### Verified Main-Workspace Result
+
+Revalidated live row:
+
+```text
+ATV-0000003
+```
+
+Final clean output:
+
+```text
+output/TikTok/Bargain Purchase/Massage Gaming Chair/
+  raw/7429146118933564690.jpg
+  raw/background.m4a
+  edited/7429146118933564690_new.mp4
+  analysis/analysis-result.md
+```
+
+Verification:
+
+```text
+42 tests passed
+```

@@ -9,8 +9,8 @@
 ## Session Context
 **Session Type**: Work (code implementation + documentation)
 **Current Project**: AI - Shoppee Video v1.0 automation
-**Status**: Cherry-pick complete — smoke test pending
-**Time**: 2026-04-27
+**Status**: TikTok structured fallback upgraded, live verified, and ready for Claude follow-up polish
+**Time**: 2026-04-28
 
 ## Time-Aware Session Context
 *Populated at session start via Time Intelligence protocol (see main/main-memory.md)*
@@ -20,18 +20,18 @@
 - **Behavior Focus**: Save point / project continuity
 
 ## Current Focus
-- **Primary Task**: Cherry-pick from codex/analysis-tiktok worktree into main — COMPLETE. Smoke test is the next step.
+- **Primary Task**: Improve TikTok extraction reliability beyond thumbnail-only fallback, then save memory and sync docs.
 - **Technical Context**: Windows PC, Cowork mode, files under C:\Users\Legend\Documents\Claude\Projects\MemoryCore
-- **Progress**: All analysis + TikTok + folder-structure features have been selectively cherry-picked into both `process_shopee_video.py` and `shoppee_video_frontend.py`. Render modes, audio fix, and mobile UX were preserved. No live test yet.
+- **Progress**: Structured TikTok page-data fallback is now implemented in `process_shopee_video.py`, promoted ahead of weak image-only `yt-dlp` results, and live-verified on `ATV-0000003`.
 
 ## Working Memory (RAM)
 *Temporary storage - cleared when session ends or when 500-line limit is reached*
 
 ### Active Context
-- **Current Topic**: Shopee + TikTok affiliate automation with stable row identity, platform-based output folders, product-info.md, analysis-result.md, and full frontend analyze workflow.
-- **Immediate Goals**: Run smoke test — start frontend, save a Shopee row, verify `output/Shopee/<Shop>/<Product>/` structure and product-info.md. Then test TikTok short URL `https://vt.tiktok.com/ZS9hjGD43/`.
-- **Recent Progress**: Cherry-pick of all Codex analysis/TikTok features into main branch completed on 2026-04-27. Both scripts updated. Cowork memory saved.
-- **Next Steps**: Smoke test (Task #13), then git commit the cherry-pick changes to the main branch. In parallel, Codex delegated explorer agent `Carson` to read Claude's ongoing main-workspace updates without modifying them.
+- **Current Topic**: Shopee + TikTok affiliate automation with stable row identity, platform-based output folders, analysis workflow, and stronger TikTok media classification.
+- **Immediate Goals**: Save this TikTok structured-fallback upgrade into project memory, skill docs, and the Obsidian vault.
+- **Recent Progress**: Added TikTok page-data parsing from `__UNIVERSAL_DATA_FOR_REHYDRATION__`, direct bundle recovery for video/photo-mode assets, audio content-type handling, rerun cleanup, and live verification on `ATV-0000003`.
+- **Next Steps**: Let Claude review and polish, then test one real TikTok post that exposes direct `playAddr`/`downloadAddr` video instead of photo-mode.
 
 ### Important Decisions
 - Chose Tier 1 foundation (Memory Consolidation, Skill Plugin, Time-Aware) for initial install.
@@ -78,6 +78,7 @@
 - **Where We Left Off**: TikTok photo-mode background audio bug was fixed; the newest `ATV-0000001` edited output now includes an AAC audio stream sourced from `background.m4a`.
 - **Where We Left Off**: The TikTok row has been stabilized into clean canonical outputs, and the local frontend is running again on `127.0.0.1:8765` and `10.10.10.5:8765`.
 - **Where We Left Off**: A second TikTok photo-mode row, `ATV-0000002`, was tested successfully after fixing the thumbnail-overwrite rerun bug; it now keeps `background.m4a` and renders with audio.
+- **Where We Left Off**: TikTok page-data fallback was upgraded on 2026-04-28 so weak image-only `yt-dlp` results can be replaced with structured TikTok assets, and live row `ATV-0000003` now ends in a clean folder with `7429146118933564690.jpg`, `background.m4a`, `7429146118933564690_new.mp4`, and `analysis-result.md`.
 - **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.
@@ -85,6 +86,7 @@
 - **TikTok Rule**: TikTok photo-mode posts may expose audio plus thumbnail media instead of an mp4; the workflow now falls back to thumbnail capture and still renders an edited output.
 - **TikTok Audio Rule**: For photo-mode posts, preserve native `background.<ext>` audio from `yt-dlp` instead of forcing AAC extraction during download; FFmpeg merges it later during render.
 - **Rerun Rule**: For TikTok photo-mode rows, overwrite the canonical thumbnail/output artifacts on rerun instead of accumulating `-2` / `-3` duplicates.
+- **TikTok Classification Rule**: Do not assume a missing MP4 means the extractor is broken. First classify the public TikTok post from page data: direct video if `downloadAddr` or `playAddr` exists, otherwise photo-mode if only image and music assets are exposed.
 
 ## Session Achievements
 - Repo cloned successfully via user-run PowerShell (git path resolution handled).
@@ -105,6 +107,7 @@
 - **Where We Left Off**: `AI - Shoppee Video v1.0` is ready for first real row testing after FFmpeg is installed or added to PATH.
 - **What's Working**: CSV/XLSX masterlist template, pending-row loader, direct media downloader, best-effort page media discovery, output folder naming, caption format, `_new` filename behavior, unit tests, and dry-run runner.
 - **What's Working**: Shopee full-product scraping, row-targeted analysis, TikTok public URL handling, and TikTok photo-mode thumbnail fallback now complete successfully in the main workspace.
+- **What's Working**: TikTok structured page-data fallback now classifies photo-mode posts, preserves direct audio URLs, and keeps canonical raw/edited outputs stable on rerun.
 - **What Needs Attention**: There is still a small `zipfile.ZipFile.__del__` cleanup warning after a successful TikTok `Download + Analyze` run on Python 3.14. Direct Google Sheet API creation/update is still deferred until a connected Sheets API/MCP surface is available.
 
 ## Session Lifecycle

@@ -507,6 +507,126 @@ def tiktok_video_id_from_url(url: str) -> str | None:
     return match.group(1) if match else None
 
 
+def first_nonempty(*values: str) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def unique_urls(urls: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for url in urls:
+        if not isinstance(url, str):
+            continue
+        candidate = url.strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        ordered.append(candidate)
+    return ordered
+
+
+def collect_tiktok_image_candidates(value) -> list[str]:
+    urls: list[str] = []
+    if isinstance(value, dict):
+        direct = first_nonempty(value.get("url"), value.get("src"))
+        if direct:
+            urls.append(direct)
+        url_list = value.get("urlList") or value.get("url_list") or []
+        if isinstance(url_list, list):
+            urls.extend(url for url in url_list if isinstance(url, str))
+        for item in value.values():
+            urls.extend(collect_tiktok_image_candidates(item))
+    elif isinstance(value, list):
+        for item in value:
+            urls.extend(collect_tiktok_image_candidates(item))
+    return unique_urls(urls)
+
+
+def build_tiktok_photo_image_urls(item_struct: dict) -> list[str]:
+    image_post = item_struct.get("imagePost") or item_struct.get("image_post")
+    if image_post:
+        image_urls = collect_tiktok_image_candidates(image_post)
+        if image_urls:
+            return image_urls
+
+    video = item_struct.get("video") or {}
+    zoom_cover = video.get("zoomCover") or {}
+    best_zoom_cover = None
+    if isinstance(zoom_cover, dict) and zoom_cover:
+        numeric_sizes = []
+        for key, value in zoom_cover.items():
+            if isinstance(value, str) and value.strip():
+                try:
+                    numeric_sizes.append((int(key), value.strip()))
+                except (TypeError, ValueError):
+                    continue
+        if numeric_sizes:
+            best_zoom_cover = max(numeric_sizes)[1]
+
+    fallback_image = first_nonempty(
+        (video.get("imagePostCover") or {}).get("imageURL", {}).get("url"),
+        video.get("originCover", ""),
+        best_zoom_cover or "",
+        video.get("cover", ""),
+        video.get("dynamicCover", ""),
+    )
+    return [fallback_image] if fallback_image else []
+
+
+def extract_tiktok_media_bundle_from_html(page_url: str, body: str) -> dict[str, object] | None:
+    if not is_tiktok_video_url(page_url):
+        return None
+
+    match = re.search(
+        r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">(.*?)</script>',
+        body,
+        flags=re.DOTALL,
+    )
+    if not match:
+        return None
+
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+    item_struct = (
+        payload.get("__DEFAULT_SCOPE__", {})
+        .get("webapp.video-detail", {})
+        .get("itemInfo", {})
+        .get("itemStruct", {})
+    )
+    if not isinstance(item_struct, dict):
+        return None
+
+    video = item_struct.get("video") or {}
+    music = item_struct.get("music") or {}
+    video_id = str(item_struct.get("id") or tiktok_video_id_from_url(page_url) or "").strip()
+    video_urls = unique_urls([
+        first_nonempty(video.get("downloadAddr", ""), video.get("playAddr", "")) or "",
+        first_nonempty(video.get("playAddr", "")) or "",
+    ])
+    image_urls = build_tiktok_photo_image_urls(item_struct)
+    audio_url = first_nonempty(music.get("playUrl", ""))
+    if video_urls:
+        kind = "video"
+    elif image_urls:
+        kind = "photo_mode"
+    else:
+        kind = "unknown"
+
+    return {
+        "kind": kind,
+        "video_id": video_id,
+        "video_urls": video_urls,
+        "image_urls": image_urls,
+        "audio_url": audio_url,
+    }
+
+
 def unique_path(directory: Path, filename: str) -> Path:
     candidate = directory / safe_filename(filename)
     if not candidate.exists():
@@ -533,6 +653,16 @@ def filename_from_url(url: str, fallback: str = "media") -> str:
     return fallback
 
 
+def discover_tiktok_media_bundle(url: str) -> dict[str, object] | None:
+    canonical_url = canonicalize_tiktok_url(url)
+    try:
+        with request_url(canonical_url, page_request_headers(canonical_url)) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError):
+        return None
+    return extract_tiktok_media_bundle_from_html(canonical_url, body)
+
+
 def download_url(url: str, target_dir: Path, fallback_name: str = "media") -> Path:
     target_dir.mkdir(parents=True, exist_ok=True)
     filename = filename_from_url(url, fallback=fallback_name)
@@ -552,6 +682,18 @@ def download_url(url: str, target_dir: Path, fallback_name: str = "media") -> Pa
 
 
 def extension_from_content_type(content_type: str) -> str:
+    if "audio/mp4" in content_type or "mp4a" in content_type:
+        return ".m4a"
+    if "audio/mpeg" in content_type or "audio/mp3" in content_type:
+        return ".mp3"
+    if "audio/aac" in content_type:
+        return ".aac"
+    if "audio/ogg" in content_type:
+        return ".ogg"
+    if "audio/webm" in content_type:
+        return ".webm"
+    if "audio/wav" in content_type or "audio/x-wav" in content_type:
+        return ".wav"
     if "mp4" in content_type:
         return ".mp4"
     if "webm" in content_type:
@@ -652,13 +794,31 @@ def download_with_ytdlp(url: str, raw_dir: Path) -> list[Path]:
     command = build_ytdlp_command(canonical_url, raw_dir)
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        return []
-    after = {path.resolve() for path in raw_dir.iterdir()}
-    media = sorted(path for path in after - before if path.suffix.lower() in MEDIA_EXTENSIONS)
+        media = []
+    else:
+        after = {path.resolve() for path in raw_dir.iterdir()}
+        media = sorted(path for path in after - before if path.suffix.lower() in MEDIA_EXTENSIONS)
     if media:
+        if is_tiktok_video_url(canonical_url) and all(path.suffix.lower() in IMAGE_EXTENSIONS for path in media):
+            bundle = discover_tiktok_media_bundle(canonical_url)
+            if bundle:
+                bundle_media = download_tiktok_bundle(bundle, raw_dir)
+                if bundle_media:
+                    for existing in media:
+                        if existing not in bundle_media:
+                            existing.unlink(missing_ok=True)
+                    cleanup_non_media_outputs(raw_dir)
+                    return bundle_media
+            download_tiktok_photo_audio(canonical_url, raw_dir)
         cleanup_non_media_outputs(raw_dir)
         return media
     if is_tiktok_video_url(canonical_url):
+        bundle = discover_tiktok_media_bundle(canonical_url)
+        if bundle:
+            bundle_media = download_tiktok_bundle(bundle, raw_dir)
+            if bundle_media:
+                cleanup_non_media_outputs(raw_dir)
+                return bundle_media
         thumbnails = download_tiktok_thumbnail_with_ytdlp(canonical_url, raw_dir)
         if thumbnails:
             # Photo-mode post detected: attempt to grab background audio for the render.
@@ -778,11 +938,75 @@ def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:
     return None
 
 
+def download_tiktok_bundle(bundle: dict[str, object], raw_dir: Path) -> list[Path]:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    kind = str(bundle.get("kind", "")).strip().lower()
+    video_id = str(bundle.get("video_id", "")).strip() or "tiktok"
+
+    if kind == "video":
+        for media_url in bundle.get("video_urls", []) or []:
+            try:
+                target = download_url(str(media_url), raw_dir, fallback_name=video_id)
+            except RuntimeError:
+                continue
+            if target.suffix.lower() in VIDEO_EXTENSIONS:
+                return [target]
+        return []
+
+    if kind == "photo_mode":
+        for existing in raw_dir.iterdir():
+            if existing.is_file() and existing.suffix.lower() in IMAGE_EXTENSIONS:
+                existing.unlink(missing_ok=True)
+        media_files: list[Path] = []
+        for index, media_url in enumerate(bundle.get("image_urls", []) or [], start=1):
+            fallback_name = video_id if index == 1 else f"{video_id}-{index}"
+            try:
+                target = download_url(str(media_url), raw_dir, fallback_name=fallback_name)
+            except RuntimeError:
+                continue
+            if target.suffix.lower() == ".image":
+                target = normalize_downloaded_image_artifact(target)
+            desired = raw_dir / safe_filename(f"{fallback_name}{target.suffix.lower()}")
+            if target != desired:
+                desired.unlink(missing_ok=True)
+                target.rename(desired)
+                target = desired
+            if target.suffix.lower() in IMAGE_EXTENSIONS:
+                media_files.append(target)
+
+        for existing in raw_dir.glob("background.*"):
+            existing.unlink(missing_ok=True)
+        audio_url = str(bundle.get("audio_url", "") or "").strip()
+        if audio_url:
+            try:
+                audio_target = download_url(audio_url, raw_dir, fallback_name="background")
+                if audio_target.suffix.lower() not in AUDIO_EXTENSIONS:
+                    audio_target.unlink(missing_ok=True)
+            except RuntimeError:
+                pass
+        return media_files
+
+    return []
+
+
 def find_background_audio(raw_dir: Path) -> Path | None:
     for candidate in sorted(raw_dir.glob("background.*")):
         if candidate.suffix.lower() in AUDIO_EXTENSIONS and candidate.is_file():
             return candidate
     return None
+
+
+def is_tiktok_photo_mode_result(url: str, raw_files: Iterable[Path]) -> bool:
+    files = list(raw_files)
+    return bool(files) and is_tiktok_video_url(url) and all(path.suffix.lower() in IMAGE_EXTENSIONS for path in files)
+
+
+def clear_rendered_outputs(edited_dir: Path) -> None:
+    if not edited_dir.exists():
+        return
+    for candidate in edited_dir.iterdir():
+        if candidate.is_file() and candidate.suffix.lower() in VIDEO_EXTENSIONS:
+            candidate.unlink(missing_ok=True)
 
 
 def copy_local_media(source: Path, target_dir: Path) -> Path:
@@ -1204,19 +1428,18 @@ def process_pending_rows(config: WorkflowConfig) -> int:
                 raise RuntimeError(no_media_message(row.product_link))
 
             # Detect TikTok photo-mode: yt-dlp returned images rather than video
-            photo_mode = (
-                is_tiktok_video_url(row.product_link)
-                and all(f.suffix.lower() in IMAGE_EXTENSIONS for f in raw_files)
-            )
+            photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
 
             caption = build_caption(row.product_name, row.shop_name)
             edited_files = []
+            if photo_mode:
+                clear_rendered_outputs(edited_dir)
             for raw_file in raw_files:
                 rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode)
                 if rendered:
                     edited_files.append(rendered)
             if edited_files:
-                photo_note = " (photo-mode post — cover thumbnail rendered with background audio)" if photo_mode else ""
+                photo_note = " (photo-mode post — image assets rendered with background audio)" if photo_mode else ""
                 message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s){photo_note}"
                 update_record(record, "Edited", message, product_folder, edited_files)
                 append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
@@ -1321,12 +1544,16 @@ def main(argv: list[str] | None = None) -> int:
                 raise RuntimeError(no_media_message(row.product_link))
             caption = build_caption(row.product_name, row.shop_name)
             edited_files = []
+            photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
+            if photo_mode:
+                clear_rendered_outputs(product_folder / "edited")
             for raw_file in raw_files:
                 rendered = render_video(raw_file, product_folder / "edited", caption, render_mode=config.render_mode)
                 if rendered:
                     edited_files.append(rendered)
             if edited_files:
-                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
+                photo_note = " (photo-mode post — image assets rendered with background audio)" if photo_mode else ""
+                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s){photo_note}"
                 update_record(record, "Edited", message, product_folder, edited_files)
             else:
                 message = "Downloaded raw media; FFmpeg not available or no renderable media"
