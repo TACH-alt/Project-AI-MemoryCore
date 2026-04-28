@@ -215,6 +215,12 @@ Verification:
 docs/superpowers/specs/2026-04-28-ai-shoppee-video-tiktok-v11-hybrid-design.md
 ```
 
+### Implementation Plan
+
+```text
+docs/superpowers/plans/2026-04-28-ai-shoppee-video-tiktok-v11-hybrid-implementation.md
+```
+
 ### Main v1.1 decisions
 
 - support public TikTok `/video/`, short-link, and `/photo/` post shapes
