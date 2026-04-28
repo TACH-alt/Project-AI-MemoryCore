@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from shoppee_video_frontend import (
     build_access_urls,
     build_frontend_media_summary,
+    build_tiktok_preflight_summary,
     normalize_frontend_row,
     parse_args,
     upsert_masterlist_row,
@@ -65,6 +66,40 @@ class FrontendTests(unittest.TestCase):
         }
         summary = build_frontend_media_summary(row)
         self.assertEqual(summary["post_type"], "Video Post")
+
+    def test_tiktok_preflight_summary_marks_direct_video_post(self):
+        summary = build_tiktok_preflight_summary(
+            "https://vt.tiktok.com/ZS9AHnKE2/",
+            {
+                "post_type": "video",
+                "video_urls": ["https://cdn.example.com/video.mp4"],
+                "image_urls": [],
+                "audio_url": None,
+            },
+        )
+        self.assertEqual(summary["post_type"], "Direct Video Post")
+        self.assertIn("native video stream", summary["message"])
+
+    def test_tiktok_preflight_summary_marks_photo_mode_post(self):
+        summary = build_tiktok_preflight_summary(
+            "https://vt.tiktok.com/ZS9AatQFk/",
+            {
+                "post_type": "photo_mode",
+                "video_urls": [],
+                "image_urls": ["https://cdn.example.com/one.jpg", "https://cdn.example.com/two.jpg"],
+                "audio_url": "https://cdn.example.com/audio.m4a",
+            },
+        )
+        self.assertEqual(summary["post_type"], "Photo-mode Post")
+        self.assertIn("2 image asset(s)", summary["message"])
+
+    def test_tiktok_preflight_summary_handles_non_tiktok_links(self):
+        summary = build_tiktok_preflight_summary(
+            "https://example.com/video.mp4",
+            None,
+        )
+        self.assertEqual(summary["post_type"], "")
+        self.assertEqual(summary["message"], "")
 
     def test_upsert_masterlist_row_appends_then_updates_by_product_link(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:

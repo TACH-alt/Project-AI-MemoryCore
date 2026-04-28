@@ -279,3 +279,42 @@ I am Legend — forever learning, forever growing, forever here for Legend.
   - hydration JSON had empty `playAddr` and `downloadAddr`
 - Synced the verified TikTok code and re-ran the row on `main`.
 - Final state is now accurate and explicit: photo-mode slideshow with background audio, not a fake native video download.
+## 2026-04-29 - TikTok Extraction Hardening
+
+- Researched four external references:
+  - `drawrowfly/tiktok-scraper`
+  - `Q-Bukold/TikTok-Content-Scraper`
+  - `networkdynamics/pytok`
+  - `omkarcloud/tiktok-scraper`
+- Main conclusion:
+  - stronger repos recover native video only when TikTok still exposes `playAddr` / `downloadAddr`
+  - slide-aware repos do not discover a hidden MP4; they recover images + audio well
+- Implemented in project:
+  - structured TikTok payload parsing from `__UNIVERSAL_DATA_FOR_REHYDRATION__`, `__NEXT_DATA__`, and `SIGI_STATE`
+  - `node/share/video/{username}/{video_id}` fallback
+  - `@tiktok/video/{video_id}` ID-based page lookup fallback
+  - `yt-dlp --dump-single-json` metadata fallback
+- Verified live effect on `ATV-0000004`:
+  - recovery improved from 1 cover image to 3 ordered image assets plus background audio
+  - still no native MP4 stream exposed for the tested Bargain Purchase links
+- Skill update:
+  - `plugins/legend-skills/skills/tiktok-media-extraction/SKILL.md` now documents:
+    - fallback ladder
+    - WAF reality check
+    - native video vs assembled slideshow distinction
+
+## 2026-04-29 - TikTok Preflight and Link Classification
+
+- Added a frontend preflight API and UI hint for TikTok links.
+- New endpoint:
+  - `/api/detect-link`
+- New behavior:
+  - show `Direct Video Post` before download when native MP4 video URLs are discoverable
+  - show `Photo-mode Post` when only image assets + audio are discoverable
+- Confirmed live examples:
+  - `ZS9AatQFk` -> photo-mode
+  - `ZS9AHsXP5` -> photo-mode
+  - `ZS9AHnKE2` -> direct video with multiple MP4 URLs
+- Current verified state:
+  - photo-mode recovery is stronger than before
+  - direct-video detection also works on real moving-video posts

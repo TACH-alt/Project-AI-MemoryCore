@@ -189,3 +189,56 @@ When `current-session.md` line count exceeds **500 lines**.
     - `Downloaded 2 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
 - Conclusion:
   - this link is not currently exposed as a native MP4 to the web workflow
+
+## 2026-04-29 TikTok Extraction Hardening
+
+- Implemented a stronger TikTok fallback ladder in `AI - Shoppee Video v1.0/scripts/process_shopee_video.py`:
+  - parse `__UNIVERSAL_DATA_FOR_REHYDRATION__`, `__NEXT_DATA__`, and `SIGI_STATE`
+  - try `node/share/video/{username}/{video_id}`
+  - try `@tiktok/video/{video_id}` ID-based page lookup
+  - fall back to `yt-dlp --dump-single-json --skip-download`
+- Added tests for:
+  - `__NEXT_DATA__` parsing
+  - `SIGI_STATE` parsing
+  - `node/share`-style payload parsing
+  - `yt-dlp` metadata bundle parsing for both real video and photo-mode
+- Verification:
+  - full test suite now passes with `56` tests
+- Live rerun of `ATV-0000004`:
+  - now discovers 3 image assets plus `background.m4a`
+  - final note:
+    - `Downloaded 4 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
+- Key takeaway:
+  - the code is better at recovering structured photo-mode assets
+  - these Bargain Purchase links still do not expose a native video stream to the public web workflow
+
+## 2026-04-29 TikTok Preflight Detector
+
+- Added a small frontend preflight detector in `AI - Shoppee Video v1.0/scripts/shoppee_video_frontend.py`.
+- When a TikTok URL is typed into the form, the frontend now calls `/api/detect-link` and shows:
+  - `Direct Video Post`
+  - `Photo-mode Post`
+  - `Unknown TikTok Media`
+- Added frontend tests for:
+  - direct video preflight summary
+  - photo-mode preflight summary
+  - non-TikTok no-op summary
+- Verification:
+  - full suite now passes with `59` tests
+
+## 2026-04-29 Confirmed TikTok Link Types
+
+- `https://vt.tiktok.com/ZS9AatQFk/`
+  - `Photo-mode Post`
+  - 3 image assets + audio
+  - no native video URL
+
+- `https://vt.tiktok.com/ZS9AHsXP5/`
+  - `Photo-mode Post`
+  - 3 image assets + audio
+  - no native video URL
+
+- `https://vt.tiktok.com/ZS9AHnKE2/`
+  - `Direct Video Post`
+  - multiple native MP4 video URLs found
+  - proves the direct-video branch is working on real moving-video posts

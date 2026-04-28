@@ -13,8 +13,10 @@ from process_shopee_video import (
     REQUIRED_COLUMNS,
     analyze_row_record,
     detect_platform,
+    discover_tiktok_media_bundle,
     ensure_masterlist_columns,
     find_record_by_id,
+    is_tiktok_video_url,
     read_masterlist,
     resolve_product_folder,
     write_masterlist,
@@ -183,6 +185,7 @@ HTML = """<!doctype html>
       <div class="grid2" style="margin-top:11px">
         <label class="wide">Product Link <span class="hint">Full Shopee/TikTok URL or direct media link — avoid short s.shopee.com.my links</span>
           <input id="fLink" type="url" required placeholder="https://shopee.com.my/Product-Name-i.xxx.xxxxxxx or https://vt.tiktok.com/…">
+          <span id="linkTypeHint" style="display:none;font-size:11px;color:#0f766e;font-weight:700;margin-top:3px;line-height:1.4"></span>
           <span id="tiktokHint" style="display:none;font-size:11px;color:#7c3aed;font-weight:600;margin-top:3px;line-height:1.4">
             📸 TikTok photo-mode (carousel) posts have no downloadable video — the workflow will render the cover thumbnail with background audio instead. For best affiliate results, use a standard TikTok video post URL.
           </span>
@@ -457,13 +460,50 @@ HTML = """<!doctype html>
     refresh();
     setInterval(refresh, 20000);
 
-    // TikTok photo-mode hint — show when a TikTok URL is typed/pasted
+    // TikTok hint + preflight detection
     (function() {
       const linkInput = document.getElementById("fLink");
+      const linkTypeHint = document.getElementById("linkTypeHint");
       const hint = document.getElementById("tiktokHint");
+      let detectTimer = null;
+      let detectSeq = 0;
+
+      function clearLinkTypeHint() {
+        linkTypeHint.style.display = "none";
+        linkTypeHint.textContent = "";
+      }
+
       function updateTikTokHint() {
-        const val = linkInput.value.toLowerCase();
-        hint.style.display = (val.includes("tiktok.com")) ? "block" : "none";
+        const val = linkInput.value.trim().toLowerCase();
+        const isTikTok = val.includes("tiktok.com");
+        hint.style.display = isTikTok ? "block" : "none";
+        if (!isTikTok) {
+          clearLinkTypeHint();
+          return;
+        }
+
+        clearTimeout(detectTimer);
+        detectTimer = setTimeout(async () => {
+          const url = linkInput.value.trim();
+          if (!url.toLowerCase().includes("tiktok.com")) {
+            clearLinkTypeHint();
+            return;
+          }
+          const seq = ++detectSeq;
+          try {
+            const result = await api("/api/detect-link", { url });
+            if (seq !== detectSeq) return;
+            if (result.post_type) {
+              linkTypeHint.textContent = "🔎 " + result.post_type + " — " + result.message;
+              linkTypeHint.style.display = "block";
+              linkTypeHint.style.color = result.post_type === "Direct Video Post" ? "#065f46" : "#7c3aed";
+            } else {
+              clearLinkTypeHint();
+            }
+          } catch (_) {
+            if (seq === detectSeq) clearLinkTypeHint();
+          }
+        }, 350);
       }
       linkInput.addEventListener("input", updateTikTokHint);
       linkInput.addEventListener("change", updateTikTokHint);
@@ -518,6 +558,31 @@ def build_frontend_media_summary(row: dict[str, str]) -> dict[str, str]:
         "post_type": post_type,
         "analysis_done": row.get("Analysis Done", "FALSE"),
         "output_file": row.get("Output File", ""),
+    }
+
+
+def build_tiktok_preflight_summary(url: str, bundle: dict[str, object] | None) -> dict[str, str]:
+    if not is_tiktok_video_url(url):
+        return {"post_type": "", "message": ""}
+
+    bundle = bundle or {}
+    post_type = str(bundle.get("post_type") or bundle.get("kind") or "").strip().lower()
+    if post_type == "video":
+        return {
+            "post_type": "Direct Video Post",
+            "message": "TikTok exposed a native video stream for direct download.",
+        }
+    if post_type == "photo_mode":
+        image_count = len(bundle.get("image_urls") or [])
+        has_audio = bool(bundle.get("audio_url"))
+        audio_note = " plus background audio" if has_audio else ""
+        return {
+            "post_type": "Photo-mode Post",
+            "message": f"TikTok exposed {image_count} image asset(s){audio_note}; the workflow will render a slideshow MP4.",
+        }
+    return {
+        "post_type": "Unknown TikTok Media",
+        "message": "TikTok media type is not clear yet; download is still the best verification step.",
     }
 
 
@@ -711,6 +776,12 @@ class FrontendHandler(BaseHTTPRequestHandler):
                 analyze_row_record(self.project_root, record)
                 write_masterlist(self.masterlist_path, records)
                 self.send_json({"message": f"Analysis complete for {record_id}. analysis-result.md written."})
+                return
+            if self.path == "/api/detect-link":
+                data = self.read_json()
+                url = data.get("url", "").strip()
+                summary = build_tiktok_preflight_summary(url, discover_tiktok_media_bundle(url) if url else None)
+                self.send_json(summary)
                 return
             if self.path == "/api/open-output":
                 open_output_folder(self.project_root)

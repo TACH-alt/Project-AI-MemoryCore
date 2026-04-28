@@ -5,6 +5,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 import html
+from http.cookiejar import CookieJar
 import json
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ import sys
 from typing import Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, unquote, urljoin, urlparse, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
@@ -27,6 +28,11 @@ DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkf
 SHOPEE_PAGE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
     "AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+)
+TIKTOK_PAGE_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/136.0.0.0 Safari/537.36"
 )
 REQUIRED_COLUMNS = [
     "Record ID",
@@ -455,6 +461,13 @@ def load_rows(masterlist_path: Path, force: bool = False) -> list[MasterRow]:
 
 
 def request_headers(url: str) -> dict[str, str]:
+    if urlparse(url).netloc.lower().endswith("tiktok.com"):
+        return {
+            "User-Agent": TIKTOK_PAGE_USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.tiktok.com/",
+        }
     return {
         "User-Agent": DEFAULT_USER_AGENT,
         "Accept": "*/*",
@@ -468,6 +481,15 @@ def page_request_headers(url: str) -> dict[str, str]:
             "Accept": "text/html,*/*",
             "Accept-Language": "en-MY,en;q=0.9",
         }
+    if is_tiktok_video_url(url) or urlparse(url).netloc.lower().endswith("tiktok.com"):
+        return {
+            "User-Agent": TIKTOK_PAGE_USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.tiktok.com/",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        }
     return request_headers(url)
 
 
@@ -477,6 +499,15 @@ def request_url(url: str, headers: dict[str, str] | None = None):
         headers=headers or request_headers(url),
     )
     return urlopen(request, timeout=45)
+
+
+def request_url_with_cookies(url: str, cookie_jar: CookieJar, headers: dict[str, str] | None = None):
+    opener = build_opener(HTTPCookieProcessor(cookie_jar))
+    request = Request(
+        url,
+        headers=headers or request_headers(url),
+    )
+    return opener.open(request, timeout=45)
 
 
 def canonicalize_tiktok_url(
@@ -506,6 +537,11 @@ def canonicalize_tiktok_url(
 def tiktok_video_id_from_url(url: str) -> str | None:
     match = re.search(r"/(?:video|photo)/(\d+)", urlparse(url).path)
     return match.group(1) if match else None
+
+
+def tiktok_username_from_url(url: str) -> str | None:
+    match = re.search(r"/@([^/?#]+)/?(?:video|photo)/\d+", urlparse(url).path)
+    return f"@{match.group(1)}" if match else None
 
 
 def first_nonempty(*values: str) -> str | None:
@@ -577,32 +613,26 @@ def build_tiktok_photo_image_urls(item_struct: dict) -> list[str]:
     return [fallback_image] if fallback_image else []
 
 
-def extract_tiktok_media_bundle_from_html(page_url: str, body: str) -> dict[str, object] | None:
+def extract_tiktok_item_struct(payload: dict[str, object], page_url: str) -> dict[str, object] | None:
+    video_id = tiktok_video_id_from_url(page_url) or ""
+    candidates = [
+        payload.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {}).get("itemInfo", {}).get("itemStruct", {}),
+        payload.get("props", {}).get("pageProps", {}).get("itemInfo", {}).get("itemStruct", {}),
+        payload.get("itemInfo", {}).get("itemStruct", {}),
+        payload.get("ItemModule", {}).get(video_id, {}),
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, dict) and candidate:
+            return candidate
+    return None
+
+
+def build_tiktok_media_bundle(payload: dict[str, object], page_url: str) -> dict[str, object] | None:
     if not is_tiktok_video_url(page_url):
         return None
-
-    match = re.search(
-        r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">(.*?)</script>',
-        body,
-        flags=re.DOTALL,
-    )
-    if not match:
-        return None
-
-    try:
-        payload = json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return None
-
-    item_struct = (
-        payload.get("__DEFAULT_SCOPE__", {})
-        .get("webapp.video-detail", {})
-        .get("itemInfo", {})
-        .get("itemStruct", {})
-    )
+    item_struct = extract_tiktok_item_struct(payload, page_url)
     if not isinstance(item_struct, dict):
         return None
-
     video = item_struct.get("video") or {}
     music = item_struct.get("music") or {}
     video_id = str(item_struct.get("id") or tiktok_video_id_from_url(page_url) or "").strip()
@@ -627,6 +657,145 @@ def extract_tiktok_media_bundle_from_html(page_url: str, body: str) -> dict[str,
         "image_urls": image_urls,
         "audio_url": audio_url,
     }
+
+
+def extract_tiktok_media_bundle_from_html(page_url: str, body: str) -> dict[str, object] | None:
+    if not is_tiktok_video_url(page_url):
+        return None
+
+    script_patterns = [
+        r'<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">(.*?)</script>',
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        r'<script id="SIGI_STATE" type="application/json">(.*?)</script>',
+    ]
+    for pattern in script_patterns:
+        match = re.search(pattern, body, flags=re.DOTALL)
+        if not match:
+            continue
+        try:
+            payload = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        bundle = build_tiktok_media_bundle(payload, page_url)
+        if bundle:
+            return bundle
+    return None
+
+
+def build_tiktok_node_share_url(url: str) -> str | None:
+    username = tiktok_username_from_url(url)
+    video_id = tiktok_video_id_from_url(url)
+    if not username or not video_id:
+        return None
+    return f"https://www.tiktok.com/node/share/video/{username.lstrip('@')}/{video_id}"
+
+
+def build_tiktok_id_lookup_url(url: str) -> str | None:
+    video_id = tiktok_video_id_from_url(url)
+    if not video_id:
+        return None
+    return f"https://www.tiktok.com/@tiktok/video/{video_id}"
+
+
+def fetch_tiktok_json(url: str, cookie_jar: CookieJar) -> dict[str, object] | None:
+    try:
+        with request_url_with_cookies(url, cookie_jar, page_request_headers(url)) as response:
+            return json.loads(response.read().decode("utf-8", errors="replace"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def fetch_tiktok_html(url: str, cookie_jar: CookieJar) -> str | None:
+    try:
+        with request_url_with_cookies(url, cookie_jar, page_request_headers(url)) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError):
+        return None
+
+
+def build_tiktok_media_bundle_from_ytdlp_metadata(
+    metadata: dict[str, object],
+    page_url: str,
+) -> dict[str, object] | None:
+    if not is_tiktok_video_url(page_url):
+        return None
+
+    video_id = str(metadata.get("id") or tiktok_video_id_from_url(page_url) or "").strip()
+    formats = metadata.get("formats") or []
+    video_urls: list[str] = []
+    audio_url = ""
+    if isinstance(formats, list):
+        ranked_video_formats: list[tuple[tuple[int, int, int], str]] = []
+        for fmt in formats:
+            if not isinstance(fmt, dict):
+                continue
+            media_url = str(fmt.get("url") or "").strip()
+            if not media_url:
+                continue
+            vcodec = str(fmt.get("vcodec") or "").strip().lower()
+            ext = str(fmt.get("ext") or "").strip().lower()
+            if vcodec and vcodec != "none":
+                rank = (
+                    int(fmt.get("height") or 0),
+                    int(fmt.get("tbr") or 0),
+                    1 if ext in {"mp4", "mov", "m4v", "webm"} else 0,
+                )
+                ranked_video_formats.append((rank, media_url))
+            elif not audio_url and str(fmt.get("acodec") or "").strip().lower() not in {"", "none"}:
+                audio_url = media_url
+        ranked_video_formats.sort(reverse=True)
+        video_urls = unique_urls(url for _, url in ranked_video_formats)
+
+    thumbnails = metadata.get("thumbnails") or []
+    ranked_images: list[tuple[int, str]] = []
+    if isinstance(thumbnails, list):
+        for thumb in thumbnails:
+            if not isinstance(thumb, dict):
+                continue
+            image_url = str(thumb.get("url") or "").strip()
+            if image_url:
+                ranked_images.append((int(thumb.get("preference") or 0), image_url))
+    ranked_images.sort(reverse=True)
+    image_urls = unique_urls(url for _, url in ranked_images)
+    thumbnail = str(metadata.get("thumbnail") or "").strip()
+    if thumbnail:
+        image_urls = unique_urls([thumbnail, *image_urls])
+
+    if video_urls:
+        kind = "video"
+    elif image_urls:
+        kind = "photo_mode"
+    else:
+        kind = "unknown"
+
+    return {
+        "kind": kind,
+        "post_type": kind,
+        "video_id": video_id,
+        "video_urls": video_urls,
+        "image_urls": image_urls,
+        "audio_url": audio_url or None,
+    }
+
+
+def discover_tiktok_media_bundle_from_ytdlp(url: str) -> dict[str, object] | None:
+    command = [
+        *build_ytdlp_prefix(allow_path_lookup=True),
+        "--dump-single-json",
+        "--skip-download",
+        "--no-warnings",
+        url,
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    try:
+        metadata = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    return build_tiktok_media_bundle_from_ytdlp_metadata(metadata, url)
 
 
 def unique_path(directory: Path, filename: str) -> Path:
@@ -657,12 +826,36 @@ def filename_from_url(url: str, fallback: str = "media") -> str:
 
 def discover_tiktok_media_bundle(url: str) -> dict[str, object] | None:
     canonical_url = canonicalize_tiktok_url(url)
-    try:
-        with request_url(canonical_url, page_request_headers(canonical_url)) as response:
-            body = response.read().decode("utf-8", errors="replace")
-    except (HTTPError, URLError, TimeoutError):
-        return None
-    return extract_tiktok_media_bundle_from_html(canonical_url, body)
+    cookie_jar = CookieJar()
+
+    body = fetch_tiktok_html(canonical_url, cookie_jar)
+    if body:
+        bundle = extract_tiktok_media_bundle_from_html(canonical_url, body)
+        if bundle and bundle.get("kind") != "unknown":
+            return bundle
+
+    node_share_url = build_tiktok_node_share_url(canonical_url)
+    if node_share_url:
+        payload = fetch_tiktok_json(node_share_url, cookie_jar)
+        bundle = build_tiktok_media_bundle(payload or {}, canonical_url) if payload else None
+        if bundle and bundle.get("kind") != "unknown":
+            return bundle
+
+    id_lookup_url = build_tiktok_id_lookup_url(canonical_url)
+    if id_lookup_url and id_lookup_url != canonical_url:
+        fallback_body = fetch_tiktok_html(id_lookup_url, cookie_jar)
+        if fallback_body:
+            bundle = extract_tiktok_media_bundle_from_html(canonical_url, fallback_body)
+            if bundle:
+                return bundle
+
+    ytdlp_bundle = discover_tiktok_media_bundle_from_ytdlp(canonical_url)
+    if ytdlp_bundle:
+        return ytdlp_bundle
+
+    if body:
+        return extract_tiktok_media_bundle_from_html(canonical_url, body)
+    return None
 
 
 def download_url(url: str, target_dir: Path, fallback_name: str = "media") -> Path:

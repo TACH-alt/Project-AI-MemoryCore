@@ -796,3 +796,73 @@ download + analyze completed successfully
   - `ATV-0000004` is currently exposed to the web workflow as a photo-mode / cover-image post, not a native MP4 video stream
   - the workflow is now behaving honestly by recording:
     - `Downloaded 2 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
+
+## TikTok Extraction Hardening - 2026-04-29
+
+- Implemented a stronger TikTok discovery ladder in `scripts/process_shopee_video.py`:
+  - browser-like TikTok page headers
+  - structured payload parsing from:
+    - `__UNIVERSAL_DATA_FOR_REHYDRATION__`
+    - `__NEXT_DATA__`
+    - `SIGI_STATE`
+  - `node/share/video/{username}/{video_id}` fallback
+  - ID-based page lookup fallback:
+    - `https://www.tiktok.com/@tiktok/video/{video_id}`
+  - `yt-dlp --dump-single-json --skip-download` metadata fallback
+- Added a new distinction in the workflow:
+  - native video URL recovery vs assembled slideshow MP4
+- Live result for `ATV-0000004` improved:
+  - before: 1 image + background audio
+  - after hardening: 3 ordered image assets + background audio
+  - masterlist note now reports:
+    - `Downloaded 4 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
+- Important conclusion:
+  - for the tested Bargain Purchase links, the hardening recovered more photo assets, but still did **not** reveal a native TikTok MP4 stream
+  - the next real ceiling increase would require a browser-backed signed/request-capture fallback, not more plain HTML scraping
+
+## TikTok Preflight Detector - 2026-04-29
+
+- Added a lightweight pre-download TikTok detector in `scripts/shoppee_video_frontend.py`.
+- The frontend now checks TikTok links before download and shows:
+  - `Direct Video Post`
+  - `Photo-mode Post`
+  - `Unknown TikTok Media`
+- This uses the same backend discovery ladder as the workflow, so the UI hint and the downloader stay aligned.
+
+### Verified Link Types
+
+- `https://vt.tiktok.com/ZS9AatQFk/`
+  - resolves to `@bargainpurchasesofficial/video/7428111282630348040`
+  - classified as `Photo-mode Post`
+  - recovered assets:
+    - 3 image URLs
+    - 1 background audio URL
+    - no native video URLs
+
+- `https://vt.tiktok.com/ZS9AHsXP5/`
+  - resolves to `@isonic165/video/7585106809770347796`
+  - classified as `Photo-mode Post`
+  - recovered assets:
+    - 3 image URLs
+    - 1 background audio URL
+    - no native video URLs
+
+- `https://vt.tiktok.com/ZS9AHnKE2/`
+  - resolves to `@mytefal/video/7628144787639782676`
+  - classified as `Direct Video Post`
+  - recovered assets:
+    - multiple native MP4 video URLs
+    - secondary cover images
+  - this confirms the direct-video branch is working for true moving-video TikTok posts
+
+### Verification
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+59 tests passed
+```

@@ -13,6 +13,8 @@ from process_shopee_video import (
     build_caption,
     build_product_folder_name,
     canonicalize_tiktok_url,
+    build_tiktok_media_bundle,
+    build_tiktok_media_bundle_from_ytdlp_metadata,
     cleanup_non_media_outputs,
     download_with_ytdlp,
     download_tiktok_bundle,
@@ -394,6 +396,138 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(bundle["video_urls"], [])
         self.assertEqual(bundle["image_urls"], [])
         self.assertIsNone(bundle["audio_url"])
+
+    def test_extract_tiktok_media_bundle_from_html_supports_next_data_payload(self):
+        body = """
+        <script id="__NEXT_DATA__" type="application/json">
+        {"props":{"pageProps":{"itemInfo":{"itemStruct":{
+            "id":"7490123456789012345",
+            "video":{"playAddr":"https://cdn.example.com/play.mp4","downloadAddr":"https://cdn.example.com/download.mp4"},
+            "music":{"playUrl":"https://cdn.example.com/music.m4a"}
+        }}}}}
+        </script>
+        """
+
+        bundle = extract_tiktok_media_bundle_from_html(
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+            body,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(
+            bundle["video_urls"],
+            ["https://cdn.example.com/download.mp4", "https://cdn.example.com/play.mp4"],
+        )
+
+    def test_extract_tiktok_media_bundle_from_html_supports_sigi_state_payload(self):
+        body = """
+        <script id="SIGI_STATE" type="application/json">
+        {"ItemModule":{"7490123456789012345":{
+            "id":"7490123456789012345",
+            "video":{"playAddr":"https://cdn.example.com/play.mp4","downloadAddr":"https://cdn.example.com/download.mp4"},
+            "music":{"playUrl":"https://cdn.example.com/music.m4a"}
+        }}}
+        </script>
+        """
+
+        bundle = extract_tiktok_media_bundle_from_html(
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+            body,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(bundle["video_id"], "7490123456789012345")
+
+    def test_build_tiktok_media_bundle_supports_node_share_payload(self):
+        payload = {
+            "statusCode": 0,
+            "itemInfo": {
+                "itemStruct": {
+                    "id": "7490123456789012345",
+                    "video": {
+                        "playAddr": "https://cdn.example.com/play.mp4",
+                        "downloadAddr": "https://cdn.example.com/download.mp4",
+                    },
+                    "music": {"playUrl": "https://cdn.example.com/music.m4a"},
+                }
+            },
+        }
+
+        bundle = build_tiktok_media_bundle(
+            payload,
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(
+            bundle["video_urls"],
+            ["https://cdn.example.com/download.mp4", "https://cdn.example.com/play.mp4"],
+        )
+
+    def test_build_tiktok_media_bundle_from_ytdlp_metadata_prefers_video_formats(self):
+        metadata = {
+            "id": "7490123456789012345",
+            "formats": [
+                {
+                    "format_id": "audio",
+                    "url": "https://cdn.example.com/audio.m4a",
+                    "vcodec": "none",
+                    "acodec": "aac",
+                    "ext": "m4a",
+                },
+                {
+                    "format_id": "video",
+                    "url": "https://cdn.example.com/video.mp4",
+                    "vcodec": "h264",
+                    "acodec": "aac",
+                    "ext": "mp4",
+                    "height": 1080,
+                },
+            ],
+            "thumbnail": "https://cdn.example.com/thumb.jpg",
+        }
+
+        bundle = build_tiktok_media_bundle_from_ytdlp_metadata(
+            metadata,
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(bundle["video_urls"], ["https://cdn.example.com/video.mp4"])
+        self.assertEqual(bundle["image_urls"], ["https://cdn.example.com/thumb.jpg"])
+
+    def test_build_tiktok_media_bundle_from_ytdlp_metadata_marks_photo_mode_for_audio_and_thumbnails(self):
+        metadata = {
+            "id": "7490123456789012345",
+            "formats": [
+                {
+                    "format_id": "audio",
+                    "url": "https://cdn.example.com/audio.m4a",
+                    "vcodec": "none",
+                    "acodec": "aac",
+                    "ext": "m4a",
+                }
+            ],
+            "thumbnails": [
+                {"id": "cover", "url": "https://cdn.example.com/cover.jpg", "preference": -1},
+                {"id": "originCover", "url": "https://cdn.example.com/origin.jpg", "preference": 1},
+            ],
+        }
+
+        bundle = build_tiktok_media_bundle_from_ytdlp_metadata(
+            metadata,
+            "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "photo_mode")
+        self.assertEqual(bundle["video_urls"], [])
+        self.assertEqual(bundle["image_urls"], ["https://cdn.example.com/origin.jpg", "https://cdn.example.com/cover.jpg"])
+        self.assertEqual(bundle["audio_url"], "https://cdn.example.com/audio.m4a")
 
     def test_download_tiktok_bundle_downloads_photo_mode_images_and_audio(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
