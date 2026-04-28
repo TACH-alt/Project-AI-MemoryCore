@@ -710,3 +710,56 @@ Download + Analyze complete for ATV-0000002.
   - edited:
     - `7430739715701099783_new.mp4`
   - `ffprobe` confirmed an AAC audio stream exists in the final MP4
+
+## TikTok v1.1 Implementation Result - 2026-04-28
+
+- Implemented in isolated branch/worktree:
+  - branch: `codex/tiktok-v11-hybrid`
+  - worktree: `.worktrees/codex-tiktok-v11-hybrid`
+- Added typed TikTok post classification:
+  - accepts public `/video/`, `/photo/`, `vt.tiktok.com`, and `vm.tiktok.com`
+  - returns `post_type` alongside the older `kind` field for compatibility
+- Added bundle-first TikTok downloads:
+  - direct video bundles now normalize to `<video_id>.mp4`
+  - photo-mode bundles preserve ordered image assets and background audio
+- Upgraded photo-mode rendering:
+  - groups ordered images by TikTok post id
+  - renders one canonical slideshow MP4
+  - keeps background audio when available
+  - writes clearer notes such as:
+    - `Downloaded 2 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
+- Added frontend result-type visibility:
+  - rows now derive `Video Post`, `Photo-mode Post`, or `Unknown TikTok Media`
+  - result type is surfaced in the table from backend summary data
+
+### Verification
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+```
+
+Result:
+
+```text
+51 tests passed
+```
+
+### Live Smoke Tests
+
+```powershell
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000001
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000002
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000003
+```
+
+Result:
+
+```text
+All three rows completed successfully.
+ATV-0000001, ATV-0000002, and ATV-0000003 now end as slideshow outputs with background audio and Analysis Done = TRUE.
+```
+
+### Known Minor Issue
+
+- Python 3.14 still prints the harmless `ZipFile.__del__` cleanup traceback after successful TikTok runs.
+- This did not block download, render, analysis, or masterlist updates.

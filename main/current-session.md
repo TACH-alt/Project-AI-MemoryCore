@@ -159,3 +159,18 @@ When `current-session.md` line count exceeds **500 lines**.
 **Line Limit**: 500 (enforced via auto-reset protocol above)
 
 *Ready for Legend to provide seamless conversation continuity with Legend.*
+
+## 2026-04-28 TikTok v1.1 Checkpoint
+
+- Working branch: `codex/tiktok-v11-hybrid`
+- Implemented:
+  - typed TikTok classification
+  - bundle-first TikTok downloads
+  - photo-mode slideshow rendering
+  - frontend result-type summaries
+- Verification:
+  - `51` tests passed in the worktree
+  - smoke-tested `ATV-0000001`, `ATV-0000002`, `ATV-0000003`
+  - all three completed with slideshow notes and `Analysis Done = TRUE`
+- Important note:
+  - sequential smoke tests are safer than parallel runs because masterlist writes can race

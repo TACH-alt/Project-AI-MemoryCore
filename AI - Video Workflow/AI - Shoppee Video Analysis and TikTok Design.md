@@ -229,3 +229,24 @@ docs/superpowers/plans/2026-04-28-ai-shoppee-video-tiktok-v11-hybrid-implementat
 - avoid deep signature/cookie API machinery for now
 - upgrade photo-mode output from weak one-image fallback toward real multi-image slideshow behavior
 - keep `Status` and `Analysis Done` simple, and put richer TikTok result type detail into `Notes`
+
+## TikTok v1.1 Implementation Outcome - 2026-04-28
+
+- Completed in isolated worktree branch `codex/tiktok-v11-hybrid`
+- Landed:
+  - typed TikTok post classification
+  - bundle-first TikTok downloads
+  - slideshow rendering for photo-mode rows
+  - lightweight frontend result-type visibility
+- Verified with:
+  - `51` passing tests
+  - live smoke runs for `ATV-0000001`, `ATV-0000002`, and `ATV-0000003`
+- Smoke-test outcome:
+  - all three rows completed as `Edited`
+  - all three rows preserved `Analysis Done = TRUE`
+  - all three rows now use slideshow-style photo-mode notes with background audio
+
+### Practical lesson
+
+- Running two `download-and-analyze` smoke tests against the same masterlist in parallel can race the CSV/XLSM writes.
+- Sequential smoke runs are the safer verification pattern for this workflow.

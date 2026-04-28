@@ -64,3 +64,16 @@ ffprobe -v quiet -show_streams -select_streams a <output.mp4>
 ```
 
 - If the page itself exposes no video URLs, do not describe the result as a failed video extraction. It is a photo-mode post.
+
+## v1.1 Upgrade Notes
+
+- Public TikTok handling now treats `/video/` and `/photo/` as first-class post shapes.
+- Prefer a typed bundle:
+  - `post_type = video`
+  - `post_type = photo_mode`
+  - `post_type = unknown`
+- Photo-mode outputs should be described honestly:
+  - ordered image assets
+  - optional `background.*` audio
+  - one slideshow MP4 output
+- For live verification, avoid running multiple TikTok smoke tests in parallel against the same masterlist because CSV/XLSM writes can race.

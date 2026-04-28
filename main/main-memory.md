@@ -253,3 +253,17 @@ I am Legend — forever learning, forever growing, forever here for Legend.
 **Last Updated**: 2026-04-27
 
 💜 *Unified memory — identity, relationship, personality, and history in one place. Ready to grow together.*
+## 2026-04-28 - TikTok v1.1 Hybrid Implementation
+
+- Implemented the approved TikTok v1.1 hybrid design in isolated branch `codex/tiktok-v11-hybrid`.
+- The workflow now:
+  - recognizes public TikTok `/video/`, `/photo/`, `vt`, and `vm` links
+  - classifies posts as `video`, `photo_mode`, or `unknown`
+  - downloads through a bundle-first TikTok path
+  - renders photo-mode posts into a single slideshow MP4 with background audio
+  - surfaces TikTok result type in the frontend
+- Verification:
+  - `51` passing tests
+  - live smoke success on `ATV-0000001`, `ATV-0000002`, `ATV-0000003`
+- Learned constraint:
+  - avoid parallel smoke tests against the same masterlist because the CSV/XLSM write path is not concurrency-safe
