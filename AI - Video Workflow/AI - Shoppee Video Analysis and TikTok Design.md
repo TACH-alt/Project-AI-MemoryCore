@@ -199,3 +199,27 @@ Verification:
 ```text
 42 tests passed
 ```
+
+## TikTok v1.1 Hybrid Design - 2026-04-28
+
+- Approved the next TikTok upgrade as a hybrid v1.1:
+  - stronger public-post extraction
+  - explicit `video` vs `photo_mode` vs `unknown` classification
+  - better multi-image photo-mode output
+  - clearer frontend feedback
+- Decided that Remotion should stay out of this phase and be handled as a separate future website/editor with its own button later.
+
+### New Spec
+
+```text
+docs/superpowers/specs/2026-04-28-ai-shoppee-video-tiktok-v11-hybrid-design.md
+```
+
+### Main v1.1 decisions
+
+- support public TikTok `/video/`, short-link, and `/photo/` post shapes
+- keep local-first architecture
+- avoid relay services as the core workflow
+- avoid deep signature/cookie API machinery for now
+- upgrade photo-mode output from weak one-image fallback toward real multi-image slideshow behavior
+- keep `Status` and `Analysis Done` simple, and put richer TikTok result type detail into `Notes`
