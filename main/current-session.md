@@ -174,3 +174,18 @@ When `current-session.md` line count exceeds **500 lines**.
   - all three completed with slideshow notes and `Analysis Done = TRUE`
 - Important note:
   - sequential smoke tests are safer than parallel runs because masterlist writes can race
+
+## 2026-04-29 ATV-0000004 Root Cause
+
+- Verified row `ATV-0000004` in live `main`.
+- Synced `main` to the verified TikTok v1.1 code for:
+  - `process_shopee_video.py`
+  - `shoppee_video_frontend.py`
+  - matching test files
+- Findings:
+  - `yt-dlp -F` showed only `audio`
+  - TikTok page data had no `playAddr` / `downloadAddr`
+  - row now records the honest result:
+    - `Downloaded 2 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`
+- Conclusion:
+  - this link is not currently exposed as a native MP4 to the web workflow

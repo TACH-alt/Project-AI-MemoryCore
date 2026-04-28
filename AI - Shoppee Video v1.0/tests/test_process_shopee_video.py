@@ -23,12 +23,15 @@ from process_shopee_video import (
     extract_tiktok_media_bundle_from_html,
     extension_from_content_type,
     extract_media_urls_from_html,
+    group_photo_mode_images,
     find_background_audio,
     filter_media_urls,
     find_executable,
     infer_image_extension,
     is_direct_media_url,
+    is_tiktok_video_url,
     load_rows,
+    build_photo_mode_status_message,
     normalize_downloaded_image_artifact,
     page_request_headers,
     REQUIRED_COLUMNS,
@@ -166,6 +169,17 @@ class HelperTests(unittest.TestCase):
     def test_tiktok_video_id_from_url_extracts_numeric_id(self):
         self.assertEqual(
             tiktok_video_id_from_url("https://www.tiktok.com/@shopdemo/video/7490123456789012345"),
+            "7490123456789012345",
+        )
+
+    def test_is_tiktok_video_url_accepts_photo_urls(self):
+        self.assertTrue(
+            is_tiktok_video_url("https://www.tiktok.com/@shopdemo/photo/7490123456789012345")
+        )
+
+    def test_tiktok_video_id_from_url_extracts_numeric_id_from_photo_url(self):
+        self.assertEqual(
+            tiktok_video_id_from_url("https://www.tiktok.com/@shopdemo/photo/7490123456789012345"),
             "7490123456789012345",
         )
 
@@ -322,6 +336,7 @@ class HelperTests(unittest.TestCase):
 
         self.assertIsNotNone(bundle)
         self.assertEqual(bundle["kind"], "video")
+        self.assertEqual(bundle["post_type"], "video")
         self.assertEqual(bundle["video_id"], "7490123456789012345")
         self.assertEqual(
             bundle["video_urls"],
@@ -348,12 +363,37 @@ class HelperTests(unittest.TestCase):
 
         self.assertIsNotNone(bundle)
         self.assertEqual(bundle["kind"], "photo_mode")
+        self.assertEqual(bundle["post_type"], "photo_mode")
         self.assertEqual(bundle["video_id"], "7490123456789012345")
         self.assertEqual(
             bundle["image_urls"],
             ["https://cdn.example.com/origin.image"],
         )
         self.assertEqual(bundle["audio_url"], "https://cdn.example.com/music.m4a")
+
+    def test_extract_tiktok_media_bundle_from_html_marks_unknown_when_no_media_assets_exist(self):
+        body = """
+        <script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">
+        {"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":{
+            "id":"7490123456789012345",
+            "video":{"playAddr":"","downloadAddr":""},
+            "music":{"playUrl":""}
+        }}}}}
+        </script>
+        """
+
+        bundle = extract_tiktok_media_bundle_from_html(
+            "https://www.tiktok.com/@shopdemo/photo/7490123456789012345",
+            body,
+        )
+
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle["kind"], "unknown")
+        self.assertEqual(bundle["post_type"], "unknown")
+        self.assertEqual(bundle["video_id"], "7490123456789012345")
+        self.assertEqual(bundle["video_urls"], [])
+        self.assertEqual(bundle["image_urls"], [])
+        self.assertIsNone(bundle["audio_url"])
 
     def test_download_tiktok_bundle_downloads_photo_mode_images_and_audio(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
@@ -388,6 +428,64 @@ class HelperTests(unittest.TestCase):
                 ["7490123456789012345.jpg", "7490123456789012345-2.jpg"],
             )
             self.assertTrue(all(path.exists() for path in media))
+            self.assertTrue((raw_dir / "background.m4a").exists())
+
+    def test_download_tiktok_bundle_prefers_direct_video_target(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            bundle = {
+                "post_type": "video",
+                "video_id": "7490123456789012345",
+                "video_urls": ["https://cdn.example.com/original-name.mp4"],
+                "image_urls": [],
+                "audio_url": "",
+            }
+
+            def fake_download(url, target_dir, fallback_name="media"):
+                target = target_dir / "original-name.mp4"
+                target.write_bytes(b"demo")
+                return target
+
+            from unittest.mock import patch
+
+            with patch("process_shopee_video.download_url", side_effect=fake_download):
+                media = download_tiktok_bundle(bundle, raw_dir)
+
+            self.assertEqual([path.name for path in media], ["7490123456789012345.mp4"])
+            self.assertTrue((raw_dir / "7490123456789012345.mp4").exists())
+
+    def test_download_tiktok_bundle_keeps_multiple_photo_assets_in_order(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            bundle = {
+                "post_type": "photo_mode",
+                "video_id": "7490123456789012345",
+                "video_urls": [],
+                "image_urls": [
+                    "https://cdn.example.com/one.jpeg",
+                    "https://cdn.example.com/two.jpeg",
+                    "https://cdn.example.com/three.jpeg",
+                ],
+                "audio_url": "https://cdn.example.com/music.m4a",
+            }
+
+            def fake_download(url, target_dir, fallback_name="media"):
+                suffix = ".m4a" if "music" in url else ".jpg"
+                target = target_dir / f"{fallback_name}{suffix}"
+                target.write_bytes(b"demo")
+                return target
+
+            from unittest.mock import patch
+
+            with patch("process_shopee_video.download_url", side_effect=fake_download):
+                media = download_tiktok_bundle(bundle, raw_dir)
+
+            self.assertEqual(
+                [path.name for path in media],
+                ["7490123456789012345.jpg", "7490123456789012345-2.jpg", "7490123456789012345-3.jpg"],
+            )
             self.assertTrue((raw_dir / "background.m4a").exists())
 
     def test_download_with_ytdlp_replaces_tiktok_thumbnail_result_with_structured_bundle(self):
@@ -429,6 +527,22 @@ class HelperTests(unittest.TestCase):
 
             self.assertEqual([path.name for path in media], ["7490123456789012345-1.jpg"])
             self.assertFalse((raw_dir / "thumb.jpg").exists())
+
+    def test_group_photo_mode_sequence_collects_ordered_images(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:
+            raw_dir = Path(tmp) / "raw"
+            raw_dir.mkdir()
+            for name in ["7490.jpg", "7490-2.jpg", "7490-3.jpg", "other.jpg"]:
+                (raw_dir / name).write_bytes(b"img")
+            files = group_photo_mode_images(raw_dir / "7490.jpg", raw_dir)
+            self.assertEqual([path.name for path in files], ["7490.jpg", "7490-2.jpg", "7490-3.jpg"])
+
+    def test_photo_mode_status_message_mentions_slideshow(self):
+        message = build_photo_mode_status_message(image_count=3, edited_count=1, has_audio=True)
+        self.assertEqual(
+            message,
+            "Downloaded 4 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)",
+        )
 
     def test_find_background_audio_prefers_existing_supported_file(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:

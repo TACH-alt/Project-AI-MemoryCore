@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from shoppee_video_frontend import (
     build_access_urls,
+    build_frontend_media_summary,
     normalize_frontend_row,
     parse_args,
     upsert_masterlist_row,
@@ -39,6 +40,31 @@ class FrontendTests(unittest.TestCase):
         self.assertEqual(row["Source Type"], "Auto")
         self.assertEqual(row["Status"], "Pending")
         self.assertEqual(row["Done"], "FALSE")
+
+    def test_frontend_row_summary_detects_photo_mode_from_notes(self):
+        row = {
+            "Record ID": "ATV-0000003",
+            "Product Link": "https://vt.tiktok.com/ZS9ST61G4/",
+            "Notes": "Downloaded 4 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)",
+            "Output Folder": r"C:\\demo\\output\\TikTok\\Bargain Purchase\\Massage Gaming Chair",
+            "Analysis Done": "TRUE",
+            "Output File": r"C:\\demo\\output\\TikTok\\Bargain Purchase\\Massage Gaming Chair\\edited\\7429146118933564690_new.mp4",
+        }
+        summary = build_frontend_media_summary(row)
+        self.assertEqual(summary["post_type"], "Photo-mode Post")
+        self.assertEqual(summary["analysis_done"], "TRUE")
+
+    def test_frontend_row_summary_detects_video_post_from_notes(self):
+        row = {
+            "Record ID": "ATV-0000004",
+            "Product Link": "https://www.tiktok.com/@shopdemo/video/7490123456789012345",
+            "Notes": "Downloaded 1 media file(s); edited 1 video file(s) (video post)",
+            "Output Folder": r"C:\\demo\\output\\TikTok\\ShopDemo\\Chair",
+            "Analysis Done": "FALSE",
+            "Output File": r"C:\\demo\\output\\TikTok\\ShopDemo\\Chair\\edited\\7490123456789012345_new.mp4",
+        }
+        summary = build_frontend_media_summary(row)
+        self.assertEqual(summary["post_type"], "Video Post")
 
     def test_upsert_masterlist_row_appends_then_updates_by_product_link(self):
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parent) as tmp:

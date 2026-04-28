@@ -329,8 +329,10 @@ HTML = """<!doctype html>
         rowsBody.innerHTML = "";
         [...rows].reverse().slice(0, 40).forEach(row => {
           const tr  = document.createElement("tr");
+          const summary = row._summary || {};
           const out = (row["Output File"] || "").split(";")[0].trim();
-          const notesCell = esc(row.Notes || "") +
+          const postType = summary.post_type ? `<div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:4px">${esc(summary.post_type)}</div>` : "";
+          const notesCell = postType + esc(row.Notes || "") +
             (out ? `<span class="out-link" data-path="${esc(out)}" title="${esc(out)}">📂 Open output file</span>` : "");
 
           const recordId = row["Record ID"] || "";
@@ -501,6 +503,24 @@ def normalize_frontend_row(payload: dict[str, str]) -> dict[str, str]:
     return row
 
 
+def build_frontend_media_summary(row: dict[str, str]) -> dict[str, str]:
+    notes = (row.get("Notes", "") or "").lower()
+    product_link = (row.get("Product Link", "") or "").lower()
+    if "photo-mode post" in notes:
+        post_type = "Photo-mode Post"
+    elif "video post" in notes:
+        post_type = "Video Post"
+    elif "tiktok.com" in product_link or "vt.tiktok.com" in product_link or "vm.tiktok.com" in product_link:
+        post_type = "Unknown TikTok Media"
+    else:
+        post_type = ""
+    return {
+        "post_type": post_type,
+        "analysis_done": row.get("Analysis Done", "FALSE"),
+        "output_file": row.get("Output File", ""),
+    }
+
+
 def upsert_masterlist_row(masterlist_path: Path, payload: dict[str, str]) -> tuple[int, dict[str, str]]:
     """Save or update a row. Returns (row_number, final_record)."""
     ensure_masterlist_columns(masterlist_path)
@@ -635,7 +655,12 @@ class FrontendHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/rows":
             ensure_masterlist_columns(self.masterlist_path)
-            self.send_json({"rows": read_masterlist(self.masterlist_path)})
+            rows = []
+            for row in read_masterlist(self.masterlist_path):
+                enriched = row.copy()
+                enriched["_summary"] = build_frontend_media_summary(enriched)
+                rows.append(enriched)
+            self.send_json({"rows": rows})
             return
         self.send_json({"message": "Not found"}, status=404)
 

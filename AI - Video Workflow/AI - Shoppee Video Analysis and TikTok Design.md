@@ -250,3 +250,17 @@ docs/superpowers/plans/2026-04-28-ai-shoppee-video-tiktok-v11-hybrid-implementat
 
 - Running two `download-and-analyze` smoke tests against the same masterlist in parallel can race the CSV/XLSM writes.
 - Sequential smoke runs are the safer verification pattern for this workflow.
+
+## ATV-0000004 Root Cause Note - 2026-04-29
+
+- The live `main` app had not yet been synced to the fully verified TikTok v1.1 code, so the user was still seeing older row wording and older frontend hints.
+- After syncing `main`, `ATV-0000004` was re-tested and still resolved as photo-mode.
+- Evidence:
+  - `yt-dlp -F` exposed only an `audio` format
+  - TikTok hydration JSON exposed no `playAddr` / `downloadAddr`
+  - the page data also did not expose a fuller `imagePost` array for this row
+- Meaning:
+  - this specific link is not currently available to the web workflow as a native downloadable video
+  - the current fallback is correct: cover image + music -> slideshow MP4
+- Remaining future improvement:
+  - deeper TikTok extraction may still help with fuller photo-asset recovery, but it will not invent a real MP4 stream where the source does not expose one

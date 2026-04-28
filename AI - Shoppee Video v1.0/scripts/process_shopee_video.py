@@ -123,10 +123,11 @@ def is_shopee_cdn_media_url(url: str) -> bool:
 
 
 def is_tiktok_video_url(url: str) -> bool:
-    """Return True for public single TikTok video URLs.
+    """Return True for public single TikTok post URLs.
 
     Handles:
     - Standard long URLs: https://www.tiktok.com/@user/video/123456
+    - Standard photo URLs: https://www.tiktok.com/@user/photo/123456
     - Short redirect links: https://vt.tiktok.com/ZS9hjGD43/
     """
     parsed = urlparse(url)
@@ -134,10 +135,10 @@ def is_tiktok_video_url(url: str) -> bool:
     if not host.endswith("tiktok.com"):
         return False
     # Short links (vt.tiktok.com) are always single-video redirects — trust yt-dlp
-    if host == "vt.tiktok.com":
+    if host in {"vt.tiktok.com", "vm.tiktok.com"}:
         return True
-    # Standard long URLs must contain /video/ in the path
-    return "/video/" in parsed.path
+    # Standard long URLs must contain /video/ or /photo/ in the path
+    return "/video/" in parsed.path or "/photo/" in parsed.path
 
 
 def detect_platform(url: str) -> str:
@@ -485,7 +486,7 @@ def canonicalize_tiktok_url(
     if not is_tiktok_video_url(url):
         return url
     parsed = urlparse(url)
-    if "/video/" in parsed.path and parsed.netloc.lower() != "vt.tiktok.com":
+    if ("/video/" in parsed.path or "/photo/" in parsed.path) and parsed.netloc.lower() not in {"vt.tiktok.com", "vm.tiktok.com"}:
         return url
 
     oembed_url = f"https://www.tiktok.com/oembed?url={quote(url, safe='')}"
@@ -496,14 +497,14 @@ def canonicalize_tiktok_url(
         return url
 
     for candidate in (payload.get("html", ""), payload.get("author_url", "")):
-        match = re.search(r"https://www\.tiktok\.com/@[^\"'?\s]+/video/\d+", candidate)
+        match = re.search(r"https://www\.tiktok\.com/@[^\"'?\s]+/(?:video|photo)/\d+", candidate)
         if match:
             return match.group(0)
     return url
 
 
 def tiktok_video_id_from_url(url: str) -> str | None:
-    match = re.search(r"/video/(\d+)", urlparse(url).path)
+    match = re.search(r"/(?:video|photo)/(\d+)", urlparse(url).path)
     return match.group(1) if match else None
 
 
@@ -620,6 +621,7 @@ def extract_tiktok_media_bundle_from_html(page_url: str, body: str) -> dict[str,
 
     return {
         "kind": kind,
+        "post_type": kind,
         "video_id": video_id,
         "video_urls": video_urls,
         "image_urls": image_urls,
@@ -940,7 +942,7 @@ def download_tiktok_photo_audio(url: str, raw_dir: Path) -> Path | None:
 
 def download_tiktok_bundle(bundle: dict[str, object], raw_dir: Path) -> list[Path]:
     raw_dir.mkdir(parents=True, exist_ok=True)
-    kind = str(bundle.get("kind", "")).strip().lower()
+    kind = str(bundle.get("post_type") or bundle.get("kind") or "").strip().lower()
     video_id = str(bundle.get("video_id", "")).strip() or "tiktok"
 
     if kind == "video":
@@ -950,6 +952,11 @@ def download_tiktok_bundle(bundle: dict[str, object], raw_dir: Path) -> list[Pat
             except RuntimeError:
                 continue
             if target.suffix.lower() in VIDEO_EXTENSIONS:
+                desired = raw_dir / safe_filename(f"{video_id}{target.suffix.lower()}")
+                if target != desired:
+                    desired.unlink(missing_ok=True)
+                    target.rename(desired)
+                    target = desired
                 return [target]
         return []
 
@@ -999,6 +1006,33 @@ def find_background_audio(raw_dir: Path) -> Path | None:
 def is_tiktok_photo_mode_result(url: str, raw_files: Iterable[Path]) -> bool:
     files = list(raw_files)
     return bool(files) and is_tiktok_video_url(url) and all(path.suffix.lower() in IMAGE_EXTENSIONS for path in files)
+
+
+def group_photo_mode_images(seed_image: Path, raw_dir: Path) -> list[Path]:
+    stem = seed_image.stem.split("-")[0]
+    ordered: list[Path] = []
+    matches: list[Path] = []
+    for candidate in raw_dir.iterdir():
+        if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        if candidate.stem == stem or candidate.stem.startswith(f"{stem}-"):
+            matches.append(candidate)
+    for candidate in sorted(
+        matches,
+        key=lambda path: (
+            0 if path.stem == stem else 1,
+            int(path.stem.split("-")[-1]) if "-" in path.stem and path.stem.split("-")[-1].isdigit() else 0,
+            path.name.lower(),
+        ),
+    ):
+        ordered.append(candidate)
+    return ordered or [seed_image]
+
+
+def build_photo_mode_status_message(image_count: int, edited_count: int, has_audio: bool) -> str:
+    raw_count = image_count + (1 if has_audio else 0)
+    note = " (photo-mode post with background audio)" if has_audio else " (photo-mode post)"
+    return f"Downloaded {raw_count} media file(s); edited {edited_count} slideshow video file(s){note}"
 
 
 def clear_rendered_outputs(edited_dir: Path) -> None:
@@ -1165,6 +1199,84 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: st
     result = subprocess.run(command, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {raw_path.name}: {result.stderr.strip()[-500:]}")
+    return output_path
+
+
+def render_photo_mode_slideshow(
+    image_paths: list[Path],
+    edited_dir: Path,
+    caption: str,
+    render_mode: str = "auto",
+) -> Path | None:
+    if not image_paths:
+        return None
+
+    ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
+    if not ffmpeg:
+        return None
+
+    edited_dir.mkdir(parents=True, exist_ok=True)
+    base_stem = image_paths[0].stem.split("-")[0]
+    output_path = replace_path(edited_dir, f"{safe_filename(base_stem)}_new.mp4")
+    background_audio = find_background_audio(image_paths[0].parent)
+    image_duration = 8 if len(image_paths) == 1 else 3
+    font = "C\\:/Windows/Fonts/arial.ttf"
+    text = escape_drawtext(caption)
+
+    input_args: list[str] = []
+    filter_parts: list[str] = []
+    concat_inputs: list[str] = []
+    for index, image_path in enumerate(image_paths):
+        input_args.extend(["-loop", "1", "-t", str(image_duration), "-i", str(image_path)])
+        filter_parts.append(
+            f"[{index}:v]scale=1080:1920:force_original_aspect_ratio=increase,"
+            f"crop=1080:1920,setsar=1,format=yuv420p[v{index}]"
+        )
+        concat_inputs.append(f"[v{index}]")
+
+    if len(image_paths) == 1:
+        filter_parts.append(
+            f"[v0]drawtext=fontfile='{font}':text='{text}':"
+            "x=(w-text_w)/2:y=h-120:fontsize=42:"
+            "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=20[v]"
+        )
+    else:
+        filter_parts.append(f"{''.join(concat_inputs)}concat=n={len(image_paths)}:v=1:a=0[base]")
+        filter_parts.append(
+            f"[base]drawtext=fontfile='{font}':text='{text}':"
+            "x=(w-text_w)/2:y=h-120:fontsize=42:"
+            "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=20[v]"
+        )
+
+    audio_index = len(image_paths)
+    if background_audio and background_audio.exists():
+        input_args.extend(["-i", str(background_audio)])
+        audio_args = ["-map", f"{audio_index}:a", "-c:a", "aac", "-shortest"]
+    else:
+        audio_args = []
+
+    command = [
+        ffmpeg,
+        "-y",
+        *input_args,
+        "-filter_complex",
+        ";".join(filter_parts),
+        "-map",
+        "[v]",
+        *audio_args,
+        "-r",
+        "30",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"FFmpeg failed for {image_paths[0].name}: {result.stderr.strip()[-500:]}")
     return output_path
 
 
@@ -1434,13 +1546,24 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             edited_files = []
             if photo_mode:
                 clear_rendered_outputs(edited_dir)
-            for raw_file in raw_files:
-                rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode)
+                photo_images = group_photo_mode_images(raw_files[0], raw_dir)
+                rendered = render_photo_mode_slideshow(photo_images, edited_dir, caption, render_mode=config.render_mode)
                 if rendered:
                     edited_files.append(rendered)
+            else:
+                for raw_file in raw_files:
+                    rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode)
+                    if rendered:
+                        edited_files.append(rendered)
             if edited_files:
-                photo_note = " (photo-mode post — image assets rendered with background audio)" if photo_mode else ""
-                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s){photo_note}"
+                if photo_mode:
+                    message = build_photo_mode_status_message(
+                        image_count=len(photo_images),
+                        edited_count=len(edited_files),
+                        has_audio=find_background_audio(raw_dir) is not None,
+                    )
+                else:
+                    message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
                 update_record(record, "Edited", message, product_folder, edited_files)
                 append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
             else:
@@ -1539,7 +1662,8 @@ def main(argv: list[str] | None = None) -> int:
             product_folder = resolve_product_folder(
                 project_root / "output", platform, row.shop_name, row.product_name
             )
-            raw_files = collect_media(row, product_folder / "raw")
+            raw_dir = product_folder / "raw"
+            raw_files = collect_media(row, raw_dir)
             if not raw_files:
                 raise RuntimeError(no_media_message(row.product_link))
             caption = build_caption(row.product_name, row.shop_name)
@@ -1547,13 +1671,24 @@ def main(argv: list[str] | None = None) -> int:
             photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
             if photo_mode:
                 clear_rendered_outputs(product_folder / "edited")
-            for raw_file in raw_files:
-                rendered = render_video(raw_file, product_folder / "edited", caption, render_mode=config.render_mode)
+                photo_images = group_photo_mode_images(raw_files[0], raw_dir)
+                rendered = render_photo_mode_slideshow(photo_images, product_folder / "edited", caption, render_mode=config.render_mode)
                 if rendered:
                     edited_files.append(rendered)
+            else:
+                for raw_file in raw_files:
+                    rendered = render_video(raw_file, product_folder / "edited", caption, render_mode=config.render_mode)
+                    if rendered:
+                        edited_files.append(rendered)
             if edited_files:
-                photo_note = " (photo-mode post — image assets rendered with background audio)" if photo_mode else ""
-                message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s){photo_note}"
+                if photo_mode:
+                    message = build_photo_mode_status_message(
+                        image_count=len(photo_images),
+                        edited_count=len(edited_files),
+                        has_audio=find_background_audio(raw_dir) is not None,
+                    )
+                else:
+                    message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
                 update_record(record, "Edited", message, product_folder, edited_files)
             else:
                 message = "Downloaded raw media; FFmpeg not available or no renderable media"

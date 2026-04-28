@@ -763,3 +763,36 @@ ATV-0000001, ATV-0000002, and ATV-0000003 now end as slideshow outputs with back
 
 - Python 3.14 still prints the harmless `ZipFile.__del__` cleanup traceback after successful TikTok runs.
 - This did not block download, render, analysis, or masterlist updates.
+
+## ATV-0000004 Verification - 2026-04-29
+
+- Synced the live `main` app to the verified TikTok v1.1 code from `codex/tiktok-v11-hybrid`:
+  - `scripts/process_shopee_video.py`
+  - `scripts/shoppee_video_frontend.py`
+  - `tests/test_process_shopee_video.py`
+  - `tests/test_shoppee_video_frontend.py`
+- Fresh verification after sync:
+
+```powershell
+python -m unittest discover -s '.\AI - Shoppee Video v1.0\tests' -v
+python -m yt_dlp -F "https://www.tiktok.com/@bargainpurchasesofficial/video/7429642666880568594"
+python '.\AI - Shoppee Video v1.0\scripts\process_shopee_video.py' --project-root '.\AI - Shoppee Video v1.0' --masterlist '.\AI - Shoppee Video v1.0\masterlist\List of Link Shopee VIdeo.csv' --download-and-analyze-record-id ATV-0000004
+```
+
+Results:
+
+```text
+51 tests passed
+yt-dlp listed only one `audio` format for ATV-0000004
+download + analyze completed successfully
+```
+
+- Page-data inspection for `ATV-0000004` confirmed:
+  - `video.downloadAddr = ""`
+  - `video.playAddr = ""`
+  - no `imagePost` array in the hydration payload
+  - one cover image URL plus background music URL
+- Conclusion:
+  - `ATV-0000004` is currently exposed to the web workflow as a photo-mode / cover-image post, not a native MP4 video stream
+  - the workflow is now behaving honestly by recording:
+    - `Downloaded 2 media file(s); edited 1 slideshow video file(s) (photo-mode post with background audio)`

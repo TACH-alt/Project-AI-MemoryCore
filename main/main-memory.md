@@ -231,7 +231,7 @@ real time, not just file modification dates.
 - **Session 21 (2026-04-27)**: Finished the running-state cleanup after the TikTok audio fix. Changed rerun behavior so TikTok photo-mode thumbnails and edited outputs overwrite their canonical filenames instead of creating `-2` / `-3` duplicates, cleaned the old duplicate artifacts from the live product folder, reran the workflow to confirm the stable final state, verified `35` tests passing, and relaunched the frontend successfully on `http://127.0.0.1:8765/` and `http://10.10.10.5:8765/`.
 - **Session 22 (2026-04-28)**: Tested a second TikTok Bargain Purchase photo-mode link for `Nordic Premium Chair` and found one more rerun bug: when the cover JPG already existed, the thumbnail step overwrote the same file in place and the workflow failed to treat it as a valid result, so background audio was skipped on rerun. Added `tiktok_video_id_from_url()` and updated the thumbnail logic to reuse the overwritten canonical image path. Verified `37` tests passing and confirmed that `ATV-0000002` now keeps `background.m4a` and renders an MP4 with an AAC audio stream.
 - **Session 23 (2026-04-28)**: Upgraded TikTok extraction again with a structured page-data fallback built from TikTok's `__UNIVERSAL_DATA_FOR_REHYDRATION__` payload. New rule: keep real video outputs when direct `downloadAddr` / `playAddr` exists, but promote structured page assets over weak image-only `yt-dlp` results for photo-mode posts. Fixed audio content-type mapping for extensionless TikTok music URLs, fixed a path-rename regression that could delete a valid image file, cleaned rerun behavior for photo-mode rows, created local skill `tiktok-media-extraction`, and live-verified `ATV-0000003` into a clean folder with `7429146118933564690.jpg`, `background.m4a`, `7429146118933564690_new.mp4`, and `analysis-result.md`. Verified `42` tests passing.
-- **Session 20 (2026-04-27)**: Reviewed Codex's live smoke-test findings and polished the TikTok photo-mode path. Decision: keep background audio in photo-mode renders. Added `download_tiktok_photo_audio()` (yt-dlp `--format ba -x --audio-format aac` → `raw/background.aac`). Updated `cleanup_non_media_outputs` to preserve `background.aac`. Wired audio into `build_ffmpeg_command` (new `background_audio` param, `1:a` map for image+audio) and `render_video` (auto-detects `raw/background.aac`). Added photo-mode detection and status note in `process_pending_rows`. Updated `no_media_message` wording. Added live purple TikTok hint in frontend (appears on paste/type). Committed both scripts.
+- **Session 24 (2026-04-28)**: Reviewed Codex commit `c0aab19` (TikTok v1.1 hybrid workflow). Codex added `discover_tiktok_media_bundle()` + `extract_tiktok_media_bundle_from_html()` — scrapes TikTok page's `itemStruct` JSON to get carousel image URLs and `music.playUrl` directly, bypassing yt-dlp for audio on photo-mode posts. Added `download_tiktok_bundle()` for CDN-direct downloads, `find_background_audio()` for any `background.*` audio extension, and `is_tiktok_photo_mode_result()` helper. Claude polished UI wording: `#tiktokHint` now says "video posts and photo carousels are both supported" (no longer warns users away from carousels); `no_media_message` for TikTok updated to reflect v1.1 dual-path and list what IS supported.
 - **Ongoing**: *[Will track recurring themes, preferences, and patterns]*
 
 ## Core Purpose
@@ -267,3 +267,15 @@ I am Legend — forever learning, forever growing, forever here for Legend.
   - live smoke success on `ATV-0000001`, `ATV-0000002`, `ATV-0000003`
 - Learned constraint:
   - avoid parallel smoke tests against the same masterlist because the CSV/XLSM write path is not concurrency-safe
+
+## 2026-04-29 - ATV-0000004 Diagnosis
+
+- User reported that TikTok row `ATV-0000004` still downloaded image + sound instead of actual video.
+- Root cause investigation showed two things:
+  1. live `main` had not yet been synced to the latest verified TikTok v1.1 code
+  2. the TikTok source itself exposed only audio + cover-image data in current web extraction paths
+- Evidence:
+  - `yt-dlp -F` returned only `audio`
+  - hydration JSON had empty `playAddr` and `downloadAddr`
+- Synced the verified TikTok code and re-ran the row on `main`.
+- Final state is now accurate and explicit: photo-mode slideshow with background audio, not a fake native video download.
