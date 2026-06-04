@@ -242,3 +242,12 @@ When `current-session.md` line count exceeds **500 lines**.
   - `Direct Video Post`
   - multiple native MP4 video URLs found
   - proves the direct-video branch is working on real moving-video posts
+
+## 2026-06-04 (Night) — Clover Persona + Nightly Restart Automation
+
+- **Workspace**: MemoryCore confirmed as main; operating as Clover persona (loaded master-memory + main-memory + current-session).
+- **Built nightly restart**: Windows Task Scheduler task `Restart Claude Code Daily`, Daily 00:00, Interactive, per-user. Script `orchestration/scripts/restart-claude-code.ps1` kills ONLY the Claude Code CLI (`...\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe`) and PRESERVES the Claude Desktop app (`WindowsApps\Claude_*`), then relaunches a fresh window via Windows Terminal in the MemoryCore folder.
+- **Continuity safeguard**: `orchestration/scripts/checkpoint-session.ps1` runs before the kill — commits dirty MemoryCore git, breadcrumbs `Legendary\00-System\auto-checkpoint-log.md` (vault not a git repo), appends to `SHARED-ACTIVITY-LOG.md`. Logs in `orchestration/logs/`.
+- **Standing rule**: script is a mechanical backstop only — Clover authors the intelligent session save (memory + diary + Obsidian mirror) as each session ends.
+- **Verified**: non-destructive test passed (kill target = CLI PID only; 7 desktop procs preserved; relaunch spawned+cleaned a fresh CLI). Auto-checkpoint commit `7ca120a`. Legend then chose option B = a true end-to-end restart now (this session's save authored first).
+- **Where We Left Off (next session)**: reload via "Legend", confirm the fresh post-restart window came up clean, close any leftover empty terminal window, then resume AI - Shoppee Video v1.0 (TikTok extraction, last 59 tests green).
