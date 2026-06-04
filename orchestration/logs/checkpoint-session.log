@@ -9,3 +9,8 @@
 [2026-06-04 23:43:09] SHARED-ACTIVITY-LOG line appended.
 [2026-06-04 23:43:09] === Pre-restart checkpoint done ===
 [2026-06-04 23:53:18] === Pre-restart checkpoint started ===
+[2026-06-04 23:53:18] MemoryCore had uncommitted changes -> committed auto-checkpoint.
+[2026-06-04 23:53:18] Vault breadcrumb appended to C:\Users\Legend\Desktop\Obsidian\Legendary\00-System\auto-checkpoint-log.md
+[2026-06-04 23:53:18] SHARED-ACTIVITY-LOG line appended.
+[2026-06-04 23:53:18] === Pre-restart checkpoint done ===
+[2026-06-05 00:00:03] === Pre-restart checkpoint started ===

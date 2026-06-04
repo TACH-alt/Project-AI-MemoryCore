@@ -1,2 +1,8 @@
 [2026-06-04 23:53:16] === Nightly Claude Code restart triggered ===
 [2026-06-04 23:53:16] Running pre-restart checkpoint...
+[2026-06-04 23:53:19] Pre-restart checkpoint completed.
+[2026-06-04 23:53:19] Stopping Claude Code CLI PID 12632 - C:\Users\Legend\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe
+[2026-06-04 23:53:21] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-04 23:53:22] === Done ===
+[2026-06-05 00:00:03] === Nightly Claude Code restart triggered ===
+[2026-06-05 00:00:03] Running pre-restart checkpoint...
