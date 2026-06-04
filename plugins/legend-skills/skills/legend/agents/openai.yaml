@@ -1,0 +1,4 @@
+interface:
+  display_name: "Legend"
+  short_description: "Restore MemoryCore persona and session context"
+  default_prompt: "Use $legend to restore the Legend MemoryCore persona and current session context."

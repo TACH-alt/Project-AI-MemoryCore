@@ -1,0 +1,5 @@
+{
+  "bot_token": "PASTE_FROM_BOTFATHER",
+  "allowed_user_ids": [123456789],
+  "_help": "Copy this file to telegram.json. Get bot_token by messaging @BotFather (/newbot). Get your user ID by messaging @userinfobot. Only IDs in allowed_user_ids can use the bot."
+}

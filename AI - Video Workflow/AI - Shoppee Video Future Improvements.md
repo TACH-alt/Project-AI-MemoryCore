@@ -89,27 +89,31 @@ http://10.10.10.5:8766/
 
 ## 2. Better Video Editing Strategy
 
-### What Can Be Done
+### Status
 
-- Preserve source audio in edited video outputs.
-- Add a lighter default mode for already-good raw videos.
-- Keep stronger vertical blur composition only as an optional mode.
-- Decide edit mode based on source shape and quality instead of forcing one style.
+- **Completed** on 2026-04-29.
 
-### What Should Not Be Assumed
+### What Was Implemented
+
+- Audio is preserved in all render modes using `-map 0:a?` (optional audio mapping).
+- Render-mode selector implemented with four modes:
+  - `auto` — picks `passthrough` for already-vertical 9:16 sources, else `light`
+  - `passthrough` — scale to 1080×1920 with lanczos, caption only (no blur/padding)
+  - `light` — scale-to-fit with black padding, small caption
+  - `vertical-blur` — blurred background canvas composition, larger caption
+- Photo-mode slideshow render supports background audio from TikTok posts.
+- Caption sizes are mode-appropriate (smaller for light, larger for vertical-blur).
+
+### What Was Not Assumed
 
 - Upscaling alone cannot create real detail from a low-bitrate square source.
 - Bigger resolution does not automatically mean better quality.
 - Not every product video needs a full remake.
 
-### How It Should Be Done
+### Verified Working
 
-- Add a render-mode selector:
-  - `light` for usable raw product videos
-  - `vertical-blur` for cases that really need a 9:16 canvas
-  - `image-video` for still-image sources
-- Preserve audio with `-map 0:a?` and AAC output.
-- Make caption size smaller and less intrusive.
+- Audio preservation confirmed via code review (2026-05-01): `build_ffmpeg_command()` correctly maps audio for video sources, photo-mode with background audio, and photo-mode without audio.
+- Render mode auto-detection uses `probe_video_dimensions()` and `is_vertical_9_16()` to pick the best mode.
 
 ## 3. CapCut Or Editor Handoff
 

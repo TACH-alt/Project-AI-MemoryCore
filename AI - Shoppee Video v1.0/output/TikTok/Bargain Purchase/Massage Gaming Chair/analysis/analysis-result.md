@@ -14,10 +14,10 @@
 
 | Property | Value |
 |---|---|
-| Duration | unknown |
-| Resolution | unknown |
-| FPS | unknown |
-| Audio | unknown |
+| Duration | 8.0s |
+| Resolution | 1080x1920 |
+| FPS | 30.00 |
+| Audio | yes |
 
 ## Suggested Hooks
 

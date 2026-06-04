@@ -5,3 +5,6 @@
 
 # Claude Code settings
 .claude/settings.local.json
+
+# Telegram bot secret config (keep example only)
+AI - Shoppee Video v1.0/config/telegram.json

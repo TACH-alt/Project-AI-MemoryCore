@@ -1,0 +1,55 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="refresh" content="30">
+        <title>Legend AI Monitor</title>
+        <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 20px; }
+            .container { max-width: 900px; margin: auto; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #30363d; padding-bottom: 10px; }
+            .status { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8em; }
+            .active { background-color: #238636; color: white; }
+            .standby { background-color: #484f58; color: white; }
+            .card { background-color: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 20px; margin-top: 20px; }
+            h2 { color: #58a6ff; font-size: 1.2em; margin-top: 0; }
+            .focus { font-size: 1.4em; color: #f0f6fc; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            .item { background: #0d1117; padding: 10px; border-radius: 4px; border-left: 3px solid #58a6ff; margin-bottom: 8px; }
+            small { color: #8b949e; }
+            .footer { text-align: center; margin-top: 40px; color: #8b949e; font-size: 0.8em; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🛰️ AI Command Monitor</h1>
+                <div class="status active">🟢 ACTIVE</div>
+            </div>
+            
+            <div class="card">
+                <h2>🧠 Current Focus</h2>
+                <div class="focus">Idle</div>
+                <p><small>Last Update: 2026-05-04 21:59:59</small></p>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h2>⚡ Active AI Engines</h2>
+                    <div class='item'>✅ python.exe</div><div class='item'>✅ cmd.exe</div><div class='item'>✅ powershell.exe</div>
+                </div>
+                <div class="card">
+                    <h2>📂 Recent Knowledge Activity</h2>
+                    <div class='item'>📄 AI-Live-Monitor.md <br><small>21:59:39</small></div><div class='item'>📄 SnapTik Analysis.md <br><small>01:42:40</small></div><div class='item'>📄 2026-04-29.md <br><small>01:30:57</small></div><div class='item'>📄 2026-04-29-001.md <br><small>01:30:28</small></div><div class='item'>📄 AI - Shoppee Video v1.0.md <br><small>01:30:19</small></div><div class='item'>📄 TikTok Media Extraction Skill.md <br><small>01:16:00</small></div><div class='item'>📄 AI - Shoppee Video Analysis and TikTok Design.md <br><small>00:38:11</small></div><div class='item'>📄 2026-04-28.md <br><small>21:42:24</small></div>
+                </div>
+            </div>
+
+            <div class="footer">
+                Legend's AI Orchestration System v1.1 | Updates every 30s
+            </div>
+        </div>
+    </body>
+    </html>
+    

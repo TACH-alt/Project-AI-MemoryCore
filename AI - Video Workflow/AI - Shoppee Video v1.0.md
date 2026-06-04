@@ -866,3 +866,36 @@ Result:
 ```text
 59 tests passed
 ```
+
+## OpenReel Video Evaluation - 2026-05-01
+
+### Purpose
+
+Evaluated OpenReel Video (github.com/Augani/openreel-video) — an open-source browser-based video editor — for learnable techniques applicable to our FFmpeg render pipeline.
+
+### Key Findings
+
+1. **Audio preservation already works** — code review confirmed `build_ffmpeg_command()` correctly uses `-map 0:a?` for video sources and `-map 1:a` for photo-mode background audio.
+2. **Render modes already implemented** — `auto`, `passthrough`, `light`, and `vertical-blur` modes all working.
+3. **OpenReel is not a direct integration candidate** — it's a browser-based React SPA, our pipeline is Python/FFmpeg batch processing.
+4. **Learnable techniques identified**:
+   - Crossfade transitions for photo-mode slideshows (FFmpeg `xfade`)
+   - Karaoke-style word-by-word captions (ASS subtitles)
+   - Audio ducking for future voiceover (FFmpeg `sidechaincompress`)
+   - Self-hosting as CapCut replacement for manual editing step
+
+### Decision
+
+Do not integrate OpenReel directly. Adopt specific FFmpeg techniques into our existing pipeline. Full analysis saved in:
+
+```text
+AI - Video Workflow/OpenReel Video Analysis.md
+```
+
+### Updated Future Improvements Status
+
+- ~~Fix audio preservation~~ → Already working (confirmed)
+- ~~Add render-mode selector~~ → Already implemented (4 modes)
+- Add crossfade transitions → Next priority
+- Add karaoke-style captions → Medium priority
+- Self-host OpenReel as editor handoff → Low priority

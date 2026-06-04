@@ -79,7 +79,7 @@
 - **Where We Left Off**: The TikTok row has been stabilized into clean canonical outputs, and the local frontend is running again on `127.0.0.1:8765` and `10.10.10.5:8765`.
 - **Where We Left Off**: A second TikTok photo-mode row, `ATV-0000002`, was tested successfully after fixing the thumbnail-overwrite rerun bug; it now keeps `background.m4a` and renders with audio.
 - **Where We Left Off**: TikTok page-data fallback was upgraded on 2026-04-28 so weak image-only `yt-dlp` results can be replaced with structured TikTok assets, and live row `ATV-0000003` now ends in a clean folder with `7429146118933564690.jpg`, `background.m4a`, `7429146118933564690_new.mp4`, and `analysis-result.md`.
-- **Important Context**: AI name = Legend, user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
+- **Important Context**: AI name = Clover (renamed from Legend on 2026-05-23), user's chosen in-system name = Legend, relationship style = collaborative partner. MemoryCore installed 2026-04-22 and refreshed on 2026-04-23.
 - **User's Current State**: Building a Shopee Video affiliate workflow and wants project memory saved plus Obsidian notes updated for every project `.md` file created or changed.
 - **Current Save Rule**: Before continuing major work, save the conversation state and mirror project-note updates into the Legendary Obsidian vault.
 - **Review Rule**: Do not overwrite Claude's in-progress main-workspace code; use the isolated worktree branch as the safe implementation checkpoint.

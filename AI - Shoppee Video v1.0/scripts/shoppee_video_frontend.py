@@ -12,11 +12,13 @@ import webbrowser
 from process_shopee_video import (
     REQUIRED_COLUMNS,
     analyze_row_record,
+    bulk_intake_rows,
     detect_platform,
     discover_tiktok_media_bundle,
     ensure_masterlist_columns,
     find_record_by_id,
     is_tiktok_video_url,
+    parse_url_lines,
     read_masterlist,
     resolve_product_folder,
     write_masterlist,
@@ -161,6 +163,19 @@ HTML = """<!doctype html>
   </header>
   <main>
 
+    <!-- Bulk Intake -->
+    <section>
+      <p class="sec-title">⚡ Bulk Intake — paste many links</p>
+      <label>URLs <span class="hint">One per line. Mix Shopee &amp; TikTok. Avoid s.shopee.com.my short links.</span>
+        <textarea id="bulkUrls" rows="6" placeholder="https://shopee.com.my/Product-Name-i.123.456&#10;https://www.tiktok.com/@user/video/789..." style="min-height:120px;font-family:Consolas,monospace;font-size:13px"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn-primary" id="bulkAddBtn">➕ Add Pending Rows</button>
+        <label class="checkline" style="margin-left:8px"><input id="bulkFetchRemote" type="checkbox"> Fetch page titles (slower, better names)</label>
+      </div>
+      <div id="bulkResults" style="margin-top:10px;font-size:12px;line-height:1.6;display:none"></div>
+    </section>
+
     <!-- Form -->
     <section>
       <p class="sec-title">Add / Update Product Row</p>
@@ -173,8 +188,9 @@ HTML = """<!doctype html>
         </label>
         <label>Render Mode
           <select id="fMode">
-            <option value="auto">Auto (light for video / blur for image)</option>
-            <option value="light">Light — scale + preserve audio</option>
+            <option value="auto">Auto (passthrough vertical, light landscape, blur images)</option>
+            <option value="passthrough">Passthrough — vertical 9:16 source, no blur/pad</option>
+            <option value="light">Light — scale + black-pad</option>
             <option value="vertical-blur">Vertical Blur — blur canvas</option>
           </select>
         </label>
@@ -339,12 +355,15 @@ HTML = """<!doctype html>
             (out ? `<span class="out-link" data-path="${esc(out)}" title="${esc(out)}">📂 Open output file</span>` : "");
 
           const recordId = row["Record ID"] || "";
+          const hook = (row["Hook"] || "").trim();
+          const hookLine = hook ? `<br><span style="display:inline-block;margin-top:3px;padding:2px 8px;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;border-radius:4px">🪝 ${esc(hook)}</span>` : "";
           tr.innerHTML = `
             <td class="col-date" data-label="Date">${esc(row.Date)}</td>
             <td data-label="Product">
               <strong>${esc(row["Product Name"])}</strong>
               ${recordId ? `<br><span style="color:var(--muted);font-size:10px;font-weight:600">${esc(recordId)}</span>` : ""}
               <br><span style="color:var(--muted);font-size:11px">${esc(row["Product Link"])}</span>
+              ${hookLine}
             </td>
             <td data-label="Shop">${esc(row["Shop Name"])}</td>
             <td class="col-status" data-label="Status">${badge(row.Status)}</td>
@@ -437,14 +456,48 @@ HTML = """<!doctype html>
       finally { btn.disabled = false; }
     };
 
+    let livePollTimer = null;
     document.getElementById("runAllBtn").onclick = async () => {
       const btn = document.getElementById("runAllBtn");
-      btn.disabled = true; setStatus("Running workflow on all pending rows — this may take a while…");
+      btn.disabled = true; setStatus("Running batch on all pending rows — live progress below…");
+      // Speed up polling so the user sees rows flip from Pending → Edited as they finish
+      if (livePollTimer) clearInterval(livePollTimer);
+      livePollTimer = setInterval(refresh, 3000);
       try {
         const r = await api("/api/run-workflow", {});
         setStatus("✅ " + r.message + (r.output ? "\\n\\n" + r.output : ""), "ok");
+      } catch(e) {
+        setStatus("❌ " + e.message + (e.output ? "\\n\\n" + e.output : ""), "err");
+      } finally {
+        btn.disabled = false;
+        if (livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
         await refresh();
-      } catch(e) { setStatus("❌ " + e.message + (e.output ? "\\n\\n" + e.output : ""), "err"); await refresh(); }
+      }
+    };
+
+    document.getElementById("bulkAddBtn").onclick = async () => {
+      const btn = document.getElementById("bulkAddBtn");
+      const text = document.getElementById("bulkUrls").value;
+      const fetchRemote = document.getElementById("bulkFetchRemote").checked;
+      if (!text.trim()) { setStatus("Paste at least one URL.", "err"); return; }
+      btn.disabled = true; setStatus("Processing URLs…");
+      try {
+        const r = await api("/api/bulk-intake", { text, fetch_remote: fetchRemote });
+        setStatus("✅ " + r.message, r.errors > 0 ? "" : "ok");
+        const box = document.getElementById("bulkResults");
+        const lines = (r.results || []).map(item => {
+          const icon = item.status === "added" ? "✅" : item.status === "skipped" ? "↷" : "❌";
+          const colour = item.status === "added" ? "#065f46" : item.status === "skipped" ? "#6b7280" : "#991b1b";
+          const label = item.status === "added"
+            ? `<strong>${esc(item.record_id || "")}</strong> · ${esc(item.platform || "?")} · ${esc(item.product_name || "")}`
+            : esc(item.message || item.status);
+          return `<div style="color:${colour}">${icon} ${esc(item.url)} — ${label}</div>`;
+        });
+        box.innerHTML = lines.join("");
+        box.style.display = lines.length ? "block" : "none";
+        if (r.added > 0) document.getElementById("bulkUrls").value = "";
+        await refresh();
+      } catch (e) { setStatus("❌ " + e.message, "err"); }
       finally { btn.disabled = false; }
     };
 
@@ -795,6 +848,26 @@ class FrontendHandler(BaseHTTPRequestHandler):
                     self.send_json({"message": "File highlighted in Explorer."})
                 else:
                     self.send_json({"message": "File not found."}, status=404)
+                return
+            if self.path == "/api/bulk-intake":
+                data = self.read_json()
+                text = data.get("text", "") or ""
+                fetch_remote = bool(data.get("fetch_remote", False))
+                urls = parse_url_lines(text)
+                if not urls:
+                    self.send_json({"message": "No URLs found in input.", "results": [], "added": 0, "skipped": 0, "errors": 0})
+                    return
+                results = bulk_intake_rows(urls, self.masterlist_path, fetch_remote=fetch_remote)
+                added = sum(1 for r in results if r.get("status") == "added")
+                skipped = sum(1 for r in results if r.get("status") == "skipped")
+                errors = sum(1 for r in results if r.get("status") == "error")
+                self.send_json({
+                    "message": f"Bulk intake: {added} added, {skipped} skipped, {errors} error(s).",
+                    "results": results,
+                    "added": added,
+                    "skipped": skipped,
+                    "errors": errors,
+                })
                 return
             if self.path == "/api/run-workflow":
                 result = run_workflow(self.project_root)

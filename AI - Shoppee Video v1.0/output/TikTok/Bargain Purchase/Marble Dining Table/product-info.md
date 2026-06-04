@@ -12,7 +12,7 @@
 | Status | Edited |
 | Done | TRUE |
 | Analysis Done | TRUE |
-| Notes | Downloaded 1 media file(s); edited 1 video file(s) |
+| Notes | Downloaded 1 media file(s); edited 1 video file(s) (photo-mode post — image assets rendered with background audio) |
 
 ## Media Summary
 

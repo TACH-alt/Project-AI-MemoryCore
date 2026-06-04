@@ -848,5 +848,393 @@ class HelperTests(unittest.TestCase):
         )
 
 
+class BulkIntakeTests(unittest.TestCase):
+    def test_parse_url_lines_strips_comments_prefixes_and_dupes(self):
+        from process_shopee_video import parse_url_lines
+
+        text = """
+# header comment
+1. https://shopee.com.my/Foo-i.1.2
+- https://www.tiktok.com/@u/video/123
+
+https://shopee.com.my/Foo-i.1.2
+"""
+        self.assertEqual(
+            parse_url_lines(text),
+            ["https://shopee.com.my/Foo-i.1.2", "https://www.tiktok.com/@u/video/123"],
+        )
+
+    def test_shopee_slug_extracts_product_name(self):
+        from process_shopee_video import shopee_slug_to_product_name
+
+        self.assertEqual(
+            shopee_slug_to_product_name("https://shopee.com.my/Cordless-UV-Mite-Vacuum-i.123.456"),
+            "Cordless UV Mite Vacuum",
+        )
+        self.assertEqual(shopee_slug_to_product_name("https://shopee.com.my/no-marker"), "")
+
+    def test_is_shopee_shortlink(self):
+        from process_shopee_video import is_shopee_shortlink
+
+        self.assertTrue(is_shopee_shortlink("https://s.shopee.com.my/abc"))
+        self.assertFalse(is_shopee_shortlink("https://shopee.com.my/x-i.1.2"))
+
+    def test_derive_metadata_rejects_shortlink(self):
+        from process_shopee_video import derive_metadata_from_url
+
+        meta = derive_metadata_from_url("https://s.shopee.com.my/abc")
+        self.assertIn("short links", meta["error"])
+        self.assertEqual(meta["product_name"], "")
+
+    def test_derive_metadata_tiktok_uses_username_and_video_id(self):
+        from process_shopee_video import derive_metadata_from_url
+
+        meta = derive_metadata_from_url("https://www.tiktok.com/@bargain/video/7350000000000000000")
+        self.assertEqual(meta["platform"], "TikTok")
+        self.assertEqual(meta["shop_name"], "@bargain")
+        self.assertIn("7350000000000000000", meta["product_name"])
+
+    def test_bulk_intake_appends_pending_rows_and_dedupes(self):
+        from process_shopee_video import bulk_intake_rows, read_masterlist
+
+        with tempfile.TemporaryDirectory() as tmp:
+            csv_path = Path(tmp) / "masterlist.csv"
+            results = bulk_intake_rows(
+                [
+                    "https://shopee.com.my/Foo-Bar-i.1.2",
+                    "https://www.tiktok.com/@u/video/9999999999999999999",
+                    "https://shopee.com.my/Foo-Bar-i.1.2",  # duplicate within batch
+                    "https://s.shopee.com.my/zzz",  # rejected
+                ],
+                csv_path,
+                today="2026-05-05",
+            )
+            statuses = [r["status"] for r in results]
+            self.assertEqual(statuses.count("added"), 2)
+            self.assertEqual(statuses.count("skipped"), 1)
+            self.assertEqual(statuses.count("error"), 1)
+
+            rows = read_masterlist(csv_path)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0]["Status"], "Pending")
+            self.assertEqual(rows[0]["Date"], "2026-05-05")
+            self.assertTrue(rows[0]["Record ID"].startswith("ASV-"))
+            self.assertTrue(rows[1]["Record ID"].startswith("ATV-"))
+
+            # Calling again with same URLs is a no-op (skipped)
+            results2 = bulk_intake_rows(
+                ["https://shopee.com.my/Foo-Bar-i.1.2"], csv_path, today="2026-05-05"
+            )
+            self.assertEqual(results2[0]["status"], "skipped")
+
+
+class RenderModeTests(unittest.TestCase):
+    def test_is_vertical_9_16_accepts_native_resolutions(self):
+        from process_shopee_video import is_vertical_9_16
+
+        self.assertTrue(is_vertical_9_16(1080, 1920))
+        self.assertTrue(is_vertical_9_16(720, 1280))
+        # Square — not vertical
+        self.assertFalse(is_vertical_9_16(720, 720))
+        # Landscape — not vertical
+        self.assertFalse(is_vertical_9_16(1920, 1080))
+        # Too small
+        self.assertFalse(is_vertical_9_16(360, 640))
+
+    def test_passthrough_filter_skips_blur_and_pad(self):
+        command = build_ffmpeg_command(
+            "ffmpeg",
+            Path("input.mp4"),
+            Path("output.mp4"),
+            "Caption",
+            render_mode="passthrough",
+        )
+        graph = command[command.index("-filter_complex") + 1]
+        self.assertNotIn("boxblur", graph)
+        self.assertNotIn("pad=", graph)
+        self.assertIn("scale=1080:1920", graph)
+        self.assertIn("drawtext", graph)
+        # Audio is preserved via the optional source map
+        self.assertIn("0:a?", command)
+
+
+class CaptionPackTests(unittest.TestCase):
+    def test_build_caption_pack_prompt_includes_required_fields(self):
+        from process_shopee_video import build_caption_pack_prompt
+
+        record = {
+            "Product Name": "Cordless UV Mite Vacuum",
+            "Shop Name": "Electrova",
+            "Product Link": "https://shopee.com.my/x-i.1.2",
+            "Notes": "approved seller media",
+        }
+        prompt = build_caption_pack_prompt(record, "Shopee")
+        for needle in ("Cordless UV Mite Vacuum", "Electrova", "Shopee", "tiktok", "reels", "shorts_title", "hashtags", "JSON"):
+            self.assertIn(needle, prompt, f"prompt missing '{needle}'")
+
+    def test_extract_json_object_handles_markdown_fences(self):
+        from process_shopee_video import extract_json_object
+
+        wrapped = "```json\n{\"tiktok\": \"hi\", \"hashtags\": [\"#a\", \"#b\"]}\n```"
+        self.assertEqual(extract_json_object(wrapped), {"tiktok": "hi", "hashtags": ["#a", "#b"]})
+
+    def test_extract_json_object_handles_trailing_prose(self):
+        from process_shopee_video import extract_json_object
+
+        noisy = "Sure! Here is the JSON:\n{\"tiktok\":\"hi\"}\nLet me know if you need more."
+        self.assertEqual(extract_json_object(noisy), {"tiktok": "hi"})
+
+    def test_extract_json_object_returns_none_on_garbage(self):
+        from process_shopee_video import extract_json_object
+
+        self.assertIsNone(extract_json_object("no json here"))
+        self.assertIsNone(extract_json_object(""))
+
+    def test_format_captions_pack_renders_all_sections(self):
+        from process_shopee_video import format_captions_pack
+
+        pack = {
+            "tiktok": "Hook line + CTA",
+            "reels": "Different copy",
+            "shorts_caption": "Watch til end",
+            "shorts_title": "Best deal",
+            "shopee": "Long persuasive copy",
+            "hashtags": ["#shopeefinds", "#tiktokmademebuyit"],
+        }
+        record = {"Record ID": "ASV-0000001", "Product Name": "Foo", "Shop Name": "Bar", "Product Link": "https://x"}
+        text = format_captions_pack(pack, record)
+        for needle in ("ASV-0000001", "TikTok", "Reels", "Shorts (YouTube)", "Shorts Title", "Shopee Affiliate", "Hashtags", "#shopeefinds"):
+            self.assertIn(needle, text)
+
+    def test_call_llm_falls_back_on_401(self):
+        from process_shopee_video import call_llm
+
+        calls = []
+
+        def fake_transport(url, payload, timeout):
+            calls.append(payload["model"])
+            if payload["model"] == "primary":
+                return 401, {"error": {"message": "auth expired"}}
+            return 200, {"choices": [{"message": {"content": "fallback worked"}}]}
+
+        result = call_llm("hi", model="primary", fallback_model="backup", transport=fake_transport)
+        self.assertEqual(result, "fallback worked")
+        self.assertEqual(calls, ["primary", "backup"])
+
+    def test_call_llm_raises_on_double_failure(self):
+        from process_shopee_video import call_llm
+
+        def fake_transport(url, payload, timeout):
+            return 500, {"error": {"message": "router down"}}
+
+        with self.assertRaises(RuntimeError):
+            call_llm("hi", model="a", fallback_model="b", transport=fake_transport)
+
+    def test_write_captions_pack_writes_formatted_file_on_valid_json(self):
+        from process_shopee_video import write_captions_pack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            product_dir = Path(tmp) / "p"
+
+            def fake_transport(url, payload, timeout):
+                return 200, {"choices": [{"message": {"content": '{"tiktok":"a","reels":"b","shorts_caption":"c","shorts_title":"d","shopee":"e","hashtags":["#x"]}'}}]}
+
+            path, err = write_captions_pack(
+                product_dir,
+                {"Record ID": "ASV-1", "Product Name": "Foo", "Shop Name": "Bar", "Product Link": "https://x"},
+                "Shopee",
+                transport=fake_transport,
+            )
+            self.assertIsNone(err)
+            self.assertIsNotNone(path)
+            self.assertTrue(path.exists())
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("=== TikTok ===", text)
+            self.assertIn("#x", text)
+
+    def test_write_captions_pack_saves_raw_when_json_invalid(self):
+        from process_shopee_video import write_captions_pack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            product_dir = Path(tmp) / "p"
+
+            def fake_transport(url, payload, timeout):
+                return 200, {"choices": [{"message": {"content": "the model rambled and forgot to JSON"}}]}
+
+            path, err = write_captions_pack(
+                product_dir,
+                {"Record ID": "ASV-1", "Product Name": "Foo", "Shop Name": "Bar", "Product Link": "https://x"},
+                "Shopee",
+                transport=fake_transport,
+            )
+            self.assertIsNotNone(err)
+            self.assertIsNotNone(path)
+            self.assertIn("WARNING", path.read_text(encoding="utf-8"))
+
+    def test_write_captions_pack_returns_error_on_llm_failure(self):
+        from process_shopee_video import write_captions_pack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            product_dir = Path(tmp) / "p"
+
+            def fake_transport(url, payload, timeout):
+                return 500, {"error": {"message": "down"}}
+
+            path, err = write_captions_pack(
+                product_dir,
+                {"Record ID": "ASV-1", "Product Name": "Foo", "Shop Name": "Bar", "Product Link": "https://x"},
+                "Shopee",
+                transport=fake_transport,
+            )
+            self.assertIsNone(path)
+            self.assertIsNotNone(err)
+
+
+class HookOverlayTests(unittest.TestCase):
+    def test_sanitize_hook_strips_quotes_and_trailing_period(self):
+        from process_shopee_video import sanitize_hook
+
+        self.assertEqual(sanitize_hook('  "Wait til you see this."  '), "Wait til you see this")
+        self.assertEqual(sanitize_hook("'Stop scrolling now!'"), "Stop scrolling now!")
+        # Curly quotes
+        self.assertEqual(sanitize_hook("“Hook line”"), "Hook line")
+
+    def test_sanitize_hook_keeps_hook_punctuation(self):
+        from process_shopee_video import sanitize_hook
+
+        self.assertEqual(sanitize_hook("You won't believe step 3?"), "You won't believe step 3?")
+
+    def test_sanitize_hook_takes_first_line_only(self):
+        from process_shopee_video import sanitize_hook
+
+        self.assertEqual(sanitize_hook("Best deal\nThis is reasoning"), "Best deal")
+
+    def test_generate_hook_returns_none_on_llm_failure(self):
+        from process_shopee_video import generate_hook
+
+        def fake_transport(url, payload, timeout):
+            return 500, {"error": {"message": "down"}}
+
+        result = generate_hook(
+            {"Product Name": "Foo", "Shop Name": "Bar"}, "Shopee", transport=fake_transport
+        )
+        self.assertIsNone(result)
+
+    def test_generate_hook_returns_sanitized_text(self):
+        from process_shopee_video import generate_hook
+
+        def fake_transport(url, payload, timeout):
+            return 200, {"choices": [{"message": {"content": '"Stop scrolling now"'}}]}
+
+        result = generate_hook(
+            {"Product Name": "Foo", "Shop Name": "Bar"}, "Shopee", transport=fake_transport
+        )
+        self.assertEqual(result, "Stop scrolling now")
+
+    def test_build_ffmpeg_command_with_hook_inserts_top_drawtext(self):
+        # Use a video extension so we hit the video branch
+        command = build_ffmpeg_command(
+            "ffmpeg",
+            Path("input.mp4"),
+            Path("output.mp4"),
+            "Shop - Product",
+            render_mode="passthrough",
+            hook_text="Wait for it",
+        )
+        graph = command[command.index("-filter_complex") + 1]
+        # Hook drawtext is added on top of the existing one
+        self.assertEqual(graph.count("drawtext="), 2)
+        self.assertIn("Wait for it", graph)
+        self.assertIn("between(t,0,1.5)", graph)
+        self.assertIn("alpha=", graph)
+        self.assertTrue(graph.endswith("[v]"))
+
+    def test_build_ffmpeg_command_without_hook_unchanged(self):
+        with_hook = build_ffmpeg_command(
+            "ffmpeg", Path("input.mp4"), Path("output.mp4"), "cap", render_mode="passthrough"
+        )
+        graph = with_hook[with_hook.index("-filter_complex") + 1]
+        self.assertEqual(graph.count("drawtext="), 1)
+        self.assertNotIn("between(t,", graph)
+
+    def test_required_columns_includes_hook(self):
+        from process_shopee_video import REQUIRED_COLUMNS
+
+        self.assertIn("Hook", REQUIRED_COLUMNS)
+
+
+class CoverImageTests(unittest.TestCase):
+    def test_cover_extract_time_uses_2s_for_long_video(self):
+        from process_shopee_video import cover_extract_time
+
+        self.assertEqual(cover_extract_time(60.0), 2.0)
+        self.assertEqual(cover_extract_time(2.5), 2.0)
+
+    def test_cover_extract_time_falls_back_for_short_video(self):
+        from process_shopee_video import cover_extract_time
+
+        self.assertEqual(cover_extract_time(1.0), 0.5)
+        self.assertAlmostEqual(cover_extract_time(0.4), 0.2)
+        # Unknown duration → safe default
+        self.assertEqual(cover_extract_time(None), 0.5)
+
+    def test_build_cover_command_includes_seek_and_drawtext_when_hook_set(self):
+        from process_shopee_video import build_cover_ffmpeg_command
+
+        cmd = build_cover_ffmpeg_command(
+            "ffmpeg", Path("video.mp4"), Path("cover.jpg"), "Stop scrolling now", 2.0
+        )
+        self.assertIn("-ss", cmd)
+        self.assertIn("2.00", cmd)
+        self.assertIn("-frames:v", cmd)
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertIn("scale=1080:1920", vf)
+        self.assertIn("drawtext=", vf)
+        self.assertIn("Stop scrolling now", vf)
+
+    def test_build_cover_command_skips_drawtext_when_no_hook(self):
+        from process_shopee_video import build_cover_ffmpeg_command
+
+        cmd = build_cover_ffmpeg_command("ffmpeg", Path("v.mp4"), Path("c.jpg"), None, 1.0)
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertNotIn("drawtext", vf)
+
+
+class TelegramHelpersTests(unittest.TestCase):
+    def test_parse_captions_sections_round_trip(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from telegram_bot import parse_captions_sections
+
+        content = (
+            "# header\n# more headers\n\n"
+            "=== TikTok ===\n"
+            "Hook line + CTA #shopee\n\n"
+            "=== Reels (Instagram) ===\n"
+            "Different copy here\n\n"
+            "=== Hashtags ===\n"
+            "#a #b #c\n"
+        )
+        sections = parse_captions_sections(content)
+        labels = [s[0] for s in sections]
+        self.assertEqual(labels, ["TikTok", "Reels (Instagram)", "Hashtags"])
+        self.assertEqual(sections[0][1], "Hook line + CTA #shopee")
+        self.assertEqual(sections[2][1], "#a #b #c")
+
+    def test_escape_md_v2_escapes_specials(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from telegram_bot import escape_md_v2
+
+        self.assertEqual(escape_md_v2("a.b!c"), "a\\.b\\!c")
+        self.assertEqual(escape_md_v2("(test)"), "\\(test\\)")
+
+    def test_escape_md_v2_code_only_escapes_backtick_and_backslash(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        from telegram_bot import escape_md_v2_code
+
+        # Inside a code block, only ` and \ need escaping; periods and parens are fine.
+        self.assertEqual(escape_md_v2_code("a.b!c"), "a.b!c")
+        self.assertEqual(escape_md_v2_code("here is `code`"), "here is \\`code\\`")
+
+
 if __name__ == "__main__":
     unittest.main()

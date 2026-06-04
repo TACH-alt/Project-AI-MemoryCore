@@ -19,11 +19,16 @@ from urllib.parse import quote, unquote, urljoin, urlparse, urlsplit, urlunsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 
+CAPTIONS_ROUTER_URL = "http://10.10.10.2:20128/v1/chat/completions"
+CAPTIONS_PRIMARY_MODEL = "gc/gemini-3-flash-preview"
+CAPTIONS_FALLBACK_MODEL = "cc/claude-haiku-4-5-20251001"
+CAPTIONS_TIMEOUT_SEC = 45
+
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 AUDIO_EXTENSIONS = {".aac", ".m4a", ".mp3", ".opus", ".ogg", ".wav", ".webm"}
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
-RENDER_MODES = frozenset({"auto", "light", "vertical-blur"})
+RENDER_MODES = frozenset({"auto", "light", "vertical-blur", "passthrough"})
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0"
 SHOPEE_PAGE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
@@ -48,6 +53,7 @@ REQUIRED_COLUMNS = [
     "Last Processed At",
     "Output Folder",
     "Output File",
+    "Hook",
 ]
 
 
@@ -70,6 +76,10 @@ class WorkflowConfig:
     force: bool = False
     dry_run: bool = False
     render_mode: str = "auto"
+    skip_captions: bool = False
+    captions_model: str = CAPTIONS_PRIMARY_MODEL
+    skip_hooks: bool = False
+    skip_cover: bool = False
 
 
 def safe_filename(value: str) -> str:
@@ -274,6 +284,76 @@ def python_user_scripts_candidates(executable_name: str) -> list[Path]:
     return [Path(appdata) / "Python" / version / "Scripts" / executable_name]
 
 
+def ffprobe_path() -> str | None:
+    direct = find_executable("ffprobe", [])
+    if direct:
+        return direct
+    ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
+    if ffmpeg:
+        candidate = Path(ffmpeg).with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+def probe_video_dimensions(path: Path) -> tuple[int, int] | None:
+    probe = ffprobe_path()
+    if not probe:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                probe, "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height",
+                "-of", "csv=p=0:s=,",
+                str(path),
+            ],
+            capture_output=True, text=True, check=False, timeout=15,
+        )
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    parts = (result.stdout or "").strip().split(",")
+    if len(parts) < 2:
+        return None
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+
+
+def probe_video_duration(path: Path) -> float | None:
+    probe = ffprobe_path()
+    if not probe:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                probe, "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1",
+                str(path),
+            ],
+            capture_output=True, text=True, check=False, timeout=15,
+        )
+    except Exception:
+        return None
+    raw = (result.stdout or "").strip()
+    try:
+        return float(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def is_vertical_9_16(width: int, height: int, *, min_height: int = 720) -> bool:
+    """True for vertical sources whose aspect is close to 9:16 (TikTok/Reels native)."""
+    if width <= 0 or height < min_height or height <= width:
+        return False
+    ratio = width / height
+    return 0.50 <= ratio <= 0.62
+
+
 def ffmpeg_candidates() -> list[Path]:
     candidates: list[Path] = []
     local_appdata = os.environ.get("LOCALAPPDATA")
@@ -375,13 +455,14 @@ def read_masterlist(masterlist_path: Path) -> list[dict[str, str]]:
         return [normalize_record(row) for row in reader]
 
 
-def write_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> None:
+def write_masterlist(masterlist_path: Path, rows: list[dict[str, str]], sync_excel: bool = True) -> None:
     rows = backfill_record_identity(rows)
     with masterlist_path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=REQUIRED_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
-    sync_excel_masterlist(masterlist_path, rows)
+    if sync_excel:
+        sync_excel_masterlist(masterlist_path, rows)
 
 
 def find_workbook_path(masterlist_path: Path) -> Path | None:
@@ -432,6 +513,7 @@ def sync_excel_masterlist(masterlist_path: Path, rows: list[dict[str, str]]) -> 
         "K": 22,  # Last Processed At
         "L": 36,  # Output Folder
         "M": 36,  # Output File
+        "N": 28,  # Hook
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
@@ -1270,7 +1352,52 @@ def collect_media(row: MasterRow, raw_dir: Path) -> list[Path]:
 
 
 def escape_drawtext(value: str) -> str:
-    return value.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+    """Escape special characters for FFmpeg drawtext filter values.
+
+    Characters that must be escaped:
+    - backslash, colon, single-quote (filter syntax)
+    - semicolon (filter_complex chain separator)
+    - percent (drawtext text expansion function trigger)
+    - square brackets (stream label delimiters in filter_complex)
+    """
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("%", "%%")
+    )
+
+
+def build_hook_drawtext(font: str, hook_text: str) -> str:
+    """Top-of-frame drawtext clause for a hook that shows for 1.5s and fades over the last 0.3s."""
+    text = escape_drawtext(hook_text)
+    return (
+        f"drawtext=fontfile='{font}':text='{text}':"
+        "x=(w-text_w)/2:y=120:fontsize=64:"
+        "fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=24:"
+        "enable='between(t,0,1.5)':"
+        "alpha='if(lt(t,1.2),1,if(lt(t,1.5),(1.5-t)/0.3,0))'"
+    )
+
+
+def _resolve_font() -> str:
+    """Return an FFmpeg-escaped font path, with fallback if arial.ttf is missing."""
+    candidates = [
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/segoeui.ttf"),
+        Path("C:/Windows/Fonts/tahoma.ttf"),
+        Path("C:/Windows/Fonts/verdana.ttf"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            # FFmpeg drawtext requires colon-escaped Windows paths with forward slashes
+            return str(candidate).replace("\\", "/").replace(":", "\\:")
+    # Last resort: return arial and let FFmpeg error if truly missing
+    return "C\\:/Windows/Fonts/arial.ttf"
 
 
 def build_ffmpeg_command(
@@ -1280,6 +1407,7 @@ def build_ffmpeg_command(
     caption: str,
     render_mode: str = "auto",
     background_audio: Path | None = None,
+    hook_text: str | None = None,
 ) -> list[str]:
     """Build an FFmpeg command for rendering a product video.
 
@@ -1292,8 +1420,19 @@ def build_ffmpeg_command(
     suffix = raw_path.suffix.lower()
     is_image = suffix in IMAGE_EXTENSIONS
 
-    font = "C\\:/Windows/Fonts/arial.ttf"
+    font = _resolve_font()
     text = escape_drawtext(caption)
+    has_caption = bool(caption.strip())
+
+    def _drawtext(x: str, y: str, fontsize: int, boxborderw: int, boxcolor_alpha: str = "0.58") -> str:
+        """Return a drawtext clause, or empty string if caption is blank."""
+        if not has_caption:
+            return ""
+        return (
+            f",drawtext=fontfile='{font}':text='{text}':"
+            f"x={x}:y={y}:fontsize={fontsize}:"
+            f"fontcolor=white:box=1:boxcolor=black@{boxcolor_alpha}:boxborderw={boxborderw}"
+        )
 
     if is_image:
         # Image source: loop for 8 s, vertical-blur canvas.
@@ -1305,46 +1444,51 @@ def build_ffmpeg_command(
             input_args = ["-loop", "1", "-t", "8", "-i", str(raw_path)]
             has_audio = False
         duration_args: list[str] = ["-shortest"]
+        caption_clause = _drawtext("(w-text_w)/2", "h-120", 42, 20)
         filter_graph = (
             "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
             "crop=1080:1920,boxblur=20:1[bg];"
             "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
-            "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-            f"drawtext=fontfile='{font}':text='{text}':"
-            "x=(w-text_w)/2:y=h-120:fontsize=42:"
-            "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=20[v]"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2{caption_clause}[v]"
         )
     else:
-        # Video source: resolve auto mode
+        # Video source: 'auto' is resolved by render_video before getting here
         effective_mode = "light" if render_mode == "auto" else render_mode
         input_args = ["-i", str(raw_path)]
         duration_args = []
         has_audio = True
 
-        if effective_mode == "light":
+        if effective_mode == "passthrough":
+            # Source is already vertical 9:16 — skip blur/padding, just normalize size and caption.
+            caption_clause = _drawtext("(w-text_w)/2", "h-180", 48, 22, "0.55")
+            filter_graph = (
+                f"[0:v]scale=1080:1920:flags=lanczos,setsar=1{caption_clause}[v]"
+            )
+        elif effective_mode == "light":
             # Scale to fit inside 1080x1920 with black padding; minimal caption
+            caption_clause = _drawtext("(w-text_w)/2", "h-100", 40, 18, "0.55")
             filter_graph = (
                 "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,"
-                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,"
-                f"drawtext=fontfile='{font}':text='{text}':"
-                "x=(w-text_w)/2:y=h-100:fontsize=40:"
-                "fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=18[v]"
+                f"pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black{caption_clause}[v]"
             )
         else:
             # vertical-blur: blurred background + centred overlay + larger caption
+            caption_clause = _drawtext("(w-text_w)/2", "h-220", 54, 28)
             filter_graph = (
                 "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,"
                 "crop=1080:1920,boxblur=20:1[bg];"
                 "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease[fg];"
-                "[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-                f"drawtext=fontfile='{font}':text='{text}':"
-                "x=(w-text_w)/2:y=h-220:fontsize=54:"
-                "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=28[v]"
+                f"[bg][fg]overlay=(W-w)/2:(H-h)/2{caption_clause}[v]"
             )
+
+    if hook_text and filter_graph.endswith("[v]"):
+        # Splice the hook drawtext into the existing graph just before the [v] sink.
+        filter_graph = filter_graph[:-3] + "," + build_hook_drawtext(font, hook_text) + "[v]"
 
     if is_image and background_audio and background_audio.exists():
         # Photo-mode: audio comes from the second input (background.aac)
-        audio_map = ["-map", "1:a", "-c:a", "aac"]
+        # Use '?' suffix so a corrupted/empty audio file won't crash the render.
+        audio_map = ["-map", "1:a?", "-c:a", "aac"]
     elif has_audio:
         # Video source: map optional audio from the single input
         audio_map = ["-map", "0:a?", "-c:a", "aac"]
@@ -1368,15 +1512,27 @@ def build_ffmpeg_command(
     ]
 
 
-def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: str = "auto") -> Path | None:
+def render_video(
+    raw_path: Path,
+    edited_dir: Path,
+    caption: str,
+    render_mode: str = "auto",
+    *,
+    hook_text: str | None = None,
+) -> Path | None:
     ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
     if not ffmpeg:
         return None
 
     edited_dir.mkdir(parents=True, exist_ok=True)
+    effective_mode = render_mode
     if raw_path.suffix.lower() in VIDEO_EXTENSIONS:
         output_name = derive_output_name(raw_path)
         background_audio = None
+        # Auto: pick passthrough for already-vertical 9:16 sources, else light
+        if render_mode == "auto":
+            dims = probe_video_dimensions(raw_path)
+            effective_mode = "passthrough" if dims and is_vertical_9_16(*dims) else "light"
     elif raw_path.suffix.lower() in IMAGE_EXTENSIONS:
         output_name = f"{safe_filename(raw_path.stem)}_new.mp4"
         # Photo-mode TikTok: look for background audio saved alongside the thumbnail
@@ -1387,9 +1543,13 @@ def render_video(raw_path: Path, edited_dir: Path, caption: str, render_mode: st
     output_path = replace_path(edited_dir, output_name)
     command = build_ffmpeg_command(
         ffmpeg, raw_path, output_path, caption,
-        render_mode=render_mode, background_audio=background_audio,
+        render_mode=effective_mode, background_audio=background_audio,
+        hook_text=hook_text,
     )
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FFmpeg timed out after 5 minutes for {raw_path.name}")
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {raw_path.name}: {result.stderr.strip()[-500:]}")
     return output_path
@@ -1400,6 +1560,8 @@ def render_photo_mode_slideshow(
     edited_dir: Path,
     caption: str,
     render_mode: str = "auto",
+    *,
+    hook_text: str | None = None,
 ) -> Path | None:
     if not image_paths:
         return None
@@ -1413,7 +1575,7 @@ def render_photo_mode_slideshow(
     output_path = replace_path(edited_dir, f"{safe_filename(base_stem)}_new.mp4")
     background_audio = find_background_audio(image_paths[0].parent)
     image_duration = 8 if len(image_paths) == 1 else 3
-    font = "C\\:/Windows/Fonts/arial.ttf"
+    font = _resolve_font()
     text = escape_drawtext(caption)
 
     input_args: list[str] = []
@@ -1441,10 +1603,14 @@ def render_photo_mode_slideshow(
             "fontcolor=white:box=1:boxcolor=black@0.58:boxborderw=20[v]"
         )
 
+    if hook_text and filter_parts and filter_parts[-1].endswith("[v]"):
+        filter_parts[-1] = filter_parts[-1][:-3] + "," + build_hook_drawtext(font, hook_text) + "[v]"
+
     audio_index = len(image_paths)
     if background_audio and background_audio.exists():
         input_args.extend(["-i", str(background_audio)])
-        audio_args = ["-map", f"{audio_index}:a", "-c:a", "aac", "-shortest"]
+        # Use '?' suffix so a corrupted/empty audio file won't crash the render.
+        audio_args = ["-map", f"{audio_index}:a?", "-c:a", "aac", "-shortest"]
     else:
         audio_args = []
 
@@ -1467,7 +1633,10 @@ def render_photo_mode_slideshow(
         "+faststart",
         str(output_path),
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"FFmpeg timed out after 5 minutes for slideshow {image_paths[0].name}")
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg failed for {image_paths[0].name}: {result.stderr.strip()[-500:]}")
     return output_path
@@ -1699,6 +1868,463 @@ def analyze_row_record(project_root: Path, record: dict[str, str]) -> None:
     write_product_info(product_folder, record, platform)
 
 
+def is_shopee_shortlink(url: str) -> bool:
+    return urlparse(url).netloc.lower().endswith("s.shopee.com.my")
+
+
+def shopee_slug_to_product_name(url: str) -> str:
+    parsed = urlparse(url)
+    path = parsed.path.lstrip("/")
+    match = re.match(r"^(.*?)-i\.\d+\.\d+", path)
+    if not match:
+        return ""
+    slug = match.group(1)
+    name = unquote(slug).replace("-", " ").strip()
+    return re.sub(r"\s+", " ", name)[:200]
+
+
+def fetch_shopee_page_title(url: str) -> str | None:
+    try:
+        with request_url(url, page_request_headers(url)) as response:
+            body = response.read().decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    og = re.search(r'<meta\s+property="og:title"\s+content="([^"]+)"', body, re.IGNORECASE)
+    if og:
+        return html.unescape(og.group(1)).strip()
+    title = re.search(r"<title>([^<]+)</title>", body, re.IGNORECASE)
+    if title:
+        return html.unescape(title.group(1)).strip()
+    return None
+
+
+def make_pending_record(url: str, date: str, product_name: str, shop_name: str) -> dict[str, str]:
+    record = {column: default_value_for_column(column) for column in REQUIRED_COLUMNS}
+    record["Date"] = date
+    record["Product Link"] = url
+    record["Product Name"] = product_name or ""
+    record["Shop Name"] = shop_name or ""
+    return normalize_record(record)
+
+
+def derive_metadata_from_url(url: str, fetch_remote: bool = False) -> dict[str, str]:
+    """Best-effort extraction of {platform, product_name, shop_name, error}."""
+    result = {"url": url, "platform": "", "product_name": "", "shop_name": "", "error": ""}
+    if not url:
+        result["error"] = "Empty URL"
+        return result
+    if is_shopee_shortlink(url):
+        result["error"] = "Shopee short links (s.shopee.com.my) are not supported — paste the full product URL."
+        return result
+    platform = detect_platform(url)
+    result["platform"] = platform
+    if platform == "Shopee":
+        result["product_name"] = shopee_slug_to_product_name(url)
+        if fetch_remote:
+            title = fetch_shopee_page_title(url)
+            if title:
+                clean = re.sub(r"\s*\|\s*Shopee.*$", "", title, flags=re.IGNORECASE).strip()
+                if clean and len(clean) > len(result["product_name"]):
+                    result["product_name"] = clean[:200]
+    elif platform == "TikTok":
+        username = tiktok_username_from_url(url) or ""
+        result["shop_name"] = username
+        vid = tiktok_video_id_from_url(url) or ""
+        result["product_name"] = f"TikTok {vid}" if vid else "TikTok Video"
+        if fetch_remote:
+            try:
+                bundle = discover_tiktok_media_bundle(url)
+                if bundle:
+                    desc = bundle.get("desc") or bundle.get("description") or ""
+                    if isinstance(desc, str) and desc.strip():
+                        result["product_name"] = desc.strip()[:120]
+                    author = bundle.get("author_unique_id") or bundle.get("author") or ""
+                    if isinstance(author, str) and author.strip():
+                        result["shop_name"] = author.strip() if author.startswith("@") else f"@{author.strip()}"
+            except Exception:
+                pass
+    elif platform == "Direct":
+        stem = Path(unquote(urlparse(url).path)).stem
+        result["product_name"] = stem or "Direct Media"
+    return result
+
+
+def parse_url_lines(text: str) -> list[str]:
+    """Extract URLs (one per line, trimmed). Strips empties, comments, and duplicates while preserving order."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in (text or "").splitlines():
+        candidate = raw.strip()
+        if not candidate or candidate.startswith("#"):
+            continue
+        # Allow lines like "1. https://..." or "- https://..."
+        match = re.search(r"https?://\S+", candidate)
+        if match:
+            candidate = match.group(0)
+        if candidate not in seen:
+            seen.add(candidate)
+            ordered.append(candidate)
+    return ordered
+
+
+def bulk_intake_rows(
+    urls: Iterable[str],
+    masterlist_path: Path,
+    *,
+    fetch_remote: bool = False,
+    today: str | None = None,
+) -> list[dict[str, str]]:
+    """For each URL, append a Pending row to the masterlist if not already present.
+
+    Returns one dict per URL with keys: url, status (added|skipped|error), message,
+    and on success: record_id, platform, product_name, shop_name.
+    """
+    rows = read_masterlist(masterlist_path)
+    existing_links = {r.get("Product Link", "").strip() for r in rows}
+    today = today or datetime.now().strftime("%Y-%m-%d")
+    results: list[dict[str, str]] = []
+    new_records: list[dict[str, str]] = []
+    for raw_url in urls:
+        url = (raw_url or "").strip()
+        if not url:
+            continue
+        meta = derive_metadata_from_url(url, fetch_remote=fetch_remote)
+        if meta["error"]:
+            results.append({"url": url, "status": "error", "message": meta["error"]})
+            continue
+        if url in existing_links:
+            results.append({"url": url, "status": "skipped", "message": "Already in masterlist."})
+            continue
+        record = make_pending_record(url, today, meta["product_name"], meta["shop_name"])
+        new_records.append(record)
+        existing_links.add(url)
+        results.append({
+            "url": url,
+            "status": "added",
+            "platform": meta["platform"],
+            "product_name": meta["product_name"],
+            "shop_name": meta["shop_name"],
+        })
+    if new_records:
+        rows.extend(new_records)
+        write_masterlist(masterlist_path, rows)
+        refreshed = read_masterlist(masterlist_path)
+        link_to_rid = {r["Product Link"]: r["Record ID"] for r in refreshed}
+        for entry in results:
+            if entry.get("status") == "added":
+                entry["record_id"] = link_to_rid.get(entry["url"], "")
+    return results
+
+
+def call_llm(
+    prompt: str,
+    *,
+    model: str = CAPTIONS_PRIMARY_MODEL,
+    fallback_model: str | None = CAPTIONS_FALLBACK_MODEL,
+    timeout: int = CAPTIONS_TIMEOUT_SEC,
+    router_url: str = CAPTIONS_ROUTER_URL,
+    transport=None,
+) -> str:
+    """Call the local 9Router (OpenAI-compatible) and return the assistant message.
+
+    On HTTP 401 (auth expired) or 5xx, retries once with `fallback_model` if set.
+    `transport` is an injection point for tests — a callable taking (url, payload, timeout)
+    and returning a (status_code, json_dict) tuple. Defaults to a real HTTP call.
+    """
+
+    def _default_transport(url: str, payload: dict, timeout_s: int) -> tuple[int, dict]:
+        request = Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=timeout_s) as response:
+                body = response.read().decode("utf-8", errors="replace")
+                return response.status, json.loads(body) if body else {}
+        except HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            try:
+                payload_err = json.loads(body) if body else {"error": {"message": body}}
+            except Exception:
+                payload_err = {"error": {"message": body}}
+            return exc.code, payload_err
+
+    transport = transport or _default_transport
+
+    def _attempt(model_id: str) -> tuple[int, dict]:
+        return transport(
+            router_url,
+            {
+                "model": model_id,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
+            timeout,
+        )
+
+    status, payload = _attempt(model)
+    if status >= 400 and fallback_model and fallback_model != model:
+        status, payload = _attempt(fallback_model)
+
+    if status >= 400:
+        message = ""
+        if isinstance(payload, dict):
+            err = payload.get("error", {})
+            if isinstance(err, dict):
+                message = err.get("message", "") or ""
+        raise RuntimeError(f"LLM call failed ({status}): {message[:300]}")
+
+    try:
+        return str(payload["choices"][0]["message"]["content"]).strip()
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"LLM response missing content: {exc}; body={str(payload)[:300]}")
+
+
+def build_caption_pack_prompt(record: dict[str, str], platform: str) -> str:
+    product_name = record.get("Product Name", "") or "(unknown product)"
+    shop_name = record.get("Shop Name", "") or ""
+    product_link = record.get("Product Link", "") or ""
+    notes = record.get("Notes", "") or ""
+    return f"""You write upload-ready short-form video copy for affiliate creators in Malaysia.
+
+Write captions for this product, returning ONLY a single JSON object — no prose, no markdown fences.
+
+Product: {product_name}
+Shop: {shop_name}
+Source platform: {platform}
+Product link: {product_link}
+Pipeline notes: {notes}
+
+JSON keys (ALL required, plain ASCII apart from emojis allowed in caption bodies):
+- "tiktok"          : TikTok caption, ≤150 chars, energetic hook + CTA, end with 3-5 hashtags
+- "reels"           : Instagram Reels caption, no Shopee link in text, hashtag-heavy
+- "shorts_caption"  : YouTube Shorts description, can mention "link in description"
+- "shorts_title"    : YouTube Shorts title, ≤60 chars, hook-style
+- "shopee"          : Shopee Affiliate caption, longer, persuasive, include CTA to buy
+- "hashtags"        : array of 6-10 platform-agnostic hashtags as strings, with the # included
+
+Constraints: native-feeling copy, no clickbait lies, English (mix in BM only if natural). Return raw JSON only."""
+
+
+def extract_json_object(text: str) -> dict | None:
+    """Pull the first {...} JSON object from a string. Tolerates markdown fences and trailing prose."""
+    if not text:
+        return None
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        # strip ```json ... ``` fences
+        candidate = re.sub(r"^```[a-zA-Z]*\s*", "", candidate)
+        candidate = re.sub(r"\s*```\s*$", "", candidate)
+    # try whole string first
+    try:
+        result = json.loads(candidate)
+        return result if isinstance(result, dict) else None
+    except json.JSONDecodeError:
+        pass
+    # fall back to the first balanced {...} block
+    depth = 0
+    start = -1
+    for index, char in enumerate(candidate):
+        if char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and start != -1:
+                snippet = candidate[start : index + 1]
+                try:
+                    result = json.loads(snippet)
+                    return result if isinstance(result, dict) else None
+                except json.JSONDecodeError:
+                    start = -1
+    return None
+
+
+def format_captions_pack(pack: dict, record: dict[str, str]) -> str:
+    def section(title: str, body: str) -> str:
+        return f"=== {title} ===\n{(body or '').strip()}\n"
+
+    hashtags = pack.get("hashtags") or []
+    if isinstance(hashtags, list):
+        hashtags_line = " ".join(str(tag).strip() for tag in hashtags if str(tag).strip())
+    else:
+        hashtags_line = str(hashtags).strip()
+
+    header = (
+        f"# Caption Pack — {record.get('Record ID', '')}\n"
+        f"# Product: {record.get('Product Name', '')}\n"
+        f"# Shop:    {record.get('Shop Name', '')}\n"
+        f"# Link:    {record.get('Product Link', '')}\n\n"
+    )
+
+    body = "\n".join([
+        section("TikTok", str(pack.get("tiktok", ""))),
+        section("Reels (Instagram)", str(pack.get("reels", ""))),
+        section("Shorts (YouTube)", str(pack.get("shorts_caption", ""))),
+        section("Shorts Title", str(pack.get("shorts_title", ""))),
+        section("Shopee Affiliate", str(pack.get("shopee", ""))),
+        section("Hashtags", hashtags_line),
+    ])
+    return header + body
+
+
+def build_hook_prompt(record: dict[str, str], platform: str) -> str:
+    product = record.get("Product Name", "") or "(unknown product)"
+    shop = record.get("Shop Name", "") or ""
+    return f"""Pick the BEST 3-6 word video hook for an affiliate Short/Reel/TikTok about this product.
+
+Product: {product}
+Shop: {shop}
+Platform: {platform}
+
+Choose the hook style that fits this product:
+- Curiosity ("You won't believe step 3", "I didn't expect this")
+- Problem-solution ("Tired of X?", "Stop doing this")
+- Price-deal ("Only RM 49", "Wait for the discount")
+
+Return ONLY the hook text. No quotes, no punctuation at the end, no explanation, no model commentary. Just the hook."""
+
+
+def sanitize_hook(text: str) -> str:
+    """Strip quotes, surrounding whitespace, trailing punctuation, and collapse whitespace."""
+    if not text:
+        return ""
+    # Remove surrounding quotes / backticks / asterisks repeatedly
+    cleaned = text.strip()
+    for _ in range(3):
+        if cleaned and cleaned[0] in {'"', "'", "`", "*", "“", "”", "‘", "’"}:
+            cleaned = cleaned[1:].strip()
+        if cleaned and cleaned[-1] in {'"', "'", "`", "*", "“", "”", "‘", "’"}:
+            cleaned = cleaned[:-1].strip()
+    # Take only the first line if the model returned several
+    cleaned = cleaned.splitlines()[0].strip() if cleaned else ""
+    # Strip a trailing period or quotation mark
+    while cleaned and cleaned[-1] in {".", "!", "?", ":", ";", ",", '"', "'"}:
+        # Keep '?' or '!' since hooks often use them — only strip if preceded by other terminator-like chars
+        if cleaned[-1] in {"?", "!"}:
+            break
+        cleaned = cleaned[:-1].strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    # Cap to a reasonable length
+    return cleaned[:80]
+
+
+def generate_hook(
+    record: dict[str, str],
+    platform: str,
+    *,
+    model: str = CAPTIONS_PRIMARY_MODEL,
+    transport=None,
+) -> str | None:
+    """Return a sanitized hook string, or None if the model call fails."""
+    try:
+        response = call_llm(build_hook_prompt(record, platform), model=model, transport=transport)
+    except Exception:
+        return None
+    hook = sanitize_hook(response)
+    return hook or None
+
+
+def write_captions_pack(
+    product_dir: Path,
+    record: dict[str, str],
+    platform: str,
+    *,
+    model: str = CAPTIONS_PRIMARY_MODEL,
+    transport=None,
+) -> tuple[Path | None, str | None]:
+    """Generate and write a caption pack next to the rendered video.
+
+    Returns (path, error). On success: (path, None). On failure: (None, error_message).
+    Never raises — captions are best-effort and must not break the batch.
+    """
+    edited_dir = product_dir / "edited"
+    edited_dir.mkdir(parents=True, exist_ok=True)
+    output_path = edited_dir / "captions.txt"
+
+    try:
+        prompt = build_caption_pack_prompt(record, platform)
+        response = call_llm(prompt, model=model, transport=transport)
+    except Exception as exc:
+        return None, f"LLM call failed: {exc}"
+
+    pack = extract_json_object(response)
+    if not pack:
+        # Save raw response so the user still has SOMETHING to copy.
+        output_path.write_text(
+            f"# Caption Pack — {record.get('Record ID', '')}\n"
+            f"# WARNING: model output was not valid JSON; raw text below.\n\n{response}\n",
+            encoding="utf-8",
+        )
+        return output_path, "LLM did not return valid JSON; raw text saved."
+
+    output_path.write_text(format_captions_pack(pack, record), encoding="utf-8")
+    return output_path, None
+
+
+def cover_extract_time(duration: float | None) -> float:
+    if duration is None or duration <= 0:
+        return 0.5
+    if duration < 2.0:
+        return max(0.1, duration / 2)
+    return 2.0
+
+
+def build_cover_ffmpeg_command(
+    ffmpeg: str,
+    mp4_path: Path,
+    output_path: Path,
+    hook_text: str | None,
+    extract_time: float,
+) -> list[str]:
+    font = "C\\:/Windows/Fonts/arial.ttf"
+    # Single frame extracted at -ss (input seek) + -frames:v 1, scaled to 1080x1920.
+    base_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+    if hook_text:
+        text = escape_drawtext(hook_text)
+        # Larger font for cover — keep one line; FFmpeg auto-truncates if too wide,
+        # but for 3-6 word hooks at 80pt this fits inside 1080 in nearly all cases.
+        cover_drawtext = (
+            f"drawtext=fontfile='{font}':text='{text}':"
+            "x=(w-text_w)/2:y=h/2-text_h:fontsize=80:"
+            "fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=28"
+        )
+        filter_chain = f"{base_filter},{cover_drawtext}"
+    else:
+        filter_chain = base_filter
+    return [
+        ffmpeg,
+        "-y",
+        "-ss", f"{extract_time:.2f}",
+        "-i", str(mp4_path),
+        "-frames:v", "1",
+        "-vf", filter_chain,
+        "-q:v", "3",
+        str(output_path),
+    ]
+
+
+def render_cover_image(mp4_path: Path, hook_text: str | None, output_path: Path) -> Path | None:
+    """Extract a frame from the rendered MP4 and overlay the hook for use as a thumbnail."""
+    ffmpeg = find_executable("ffmpeg", ffmpeg_candidates())
+    if not ffmpeg or not mp4_path.exists():
+        return None
+    duration = probe_video_duration(mp4_path)
+    extract_time = cover_extract_time(duration)
+    command = build_cover_ffmpeg_command(ffmpeg, mp4_path, output_path, hook_text, extract_time)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    except Exception:
+        return None
+    if result.returncode != 0 or not output_path.exists():
+        return None
+    return output_path
+
+
 def process_pending_rows(config: WorkflowConfig) -> int:
     records = read_masterlist(config.masterlist_path)
     log_path = config.project_root / "logs" / "run-log.csv"
@@ -1736,16 +2362,24 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
 
             caption = build_caption(row.product_name, row.shop_name)
+
+            # Hook generation (cached on the row): reuse Hook column on rerun, otherwise call LLM.
+            hook_text: str | None = (record.get("Hook") or "").strip() or None
+            if not hook_text and not config.skip_hooks:
+                hook_text = generate_hook(record, platform, model=config.captions_model)
+                if hook_text:
+                    record["Hook"] = hook_text
+
             edited_files = []
             if photo_mode:
                 clear_rendered_outputs(edited_dir)
                 photo_images = group_photo_mode_images(raw_files[0], raw_dir)
-                rendered = render_photo_mode_slideshow(photo_images, edited_dir, caption, render_mode=config.render_mode)
+                rendered = render_photo_mode_slideshow(photo_images, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
                 if rendered:
                     edited_files.append(rendered)
             else:
                 for raw_file in raw_files:
-                    rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode)
+                    rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
                     if rendered:
                         edited_files.append(rendered)
             if edited_files:
@@ -1759,6 +2393,21 @@ def process_pending_rows(config: WorkflowConfig) -> int:
                     message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
                 update_record(record, "Edited", message, product_folder, edited_files)
                 append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
+                # Best-effort caption pack — never fail the row on caption errors.
+                if not config.skip_captions:
+                    captions_path, captions_error = write_captions_pack(
+                        product_folder, record, platform, model=config.captions_model
+                    )
+                    if captions_error:
+                        print(f"Row {row.row_number}: captions skipped — {captions_error}")
+                    elif captions_path:
+                        print(f"Row {row.row_number}: captions written to {captions_path.name}")
+                # Best-effort cover image — only for video outputs (skip image-derived photo-mode for now).
+                if not config.skip_cover and edited_files and not photo_mode:
+                    cover_path = edited_dir / "cover.jpg"
+                    cover = render_cover_image(edited_files[0], hook_text, cover_path)
+                    if cover:
+                        print(f"Row {row.row_number}: cover image written to {cover.name}")
             else:
                 message = "Downloaded raw media; FFmpeg is not installed or no renderable media was found"
                 update_record(record, "Downloaded", message, product_folder, raw_files)
@@ -1770,6 +2419,10 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             update_record(record, "Failed", message, product_folder, [])
             append_log(log_path, row, "Failed", message)
             print(f"Row {row.row_number}: Failed - {message}")
+
+        # Incremental write so the frontend sees live progress mid-batch (CSV only; xlsm synced at end)
+        if not config.dry_run:
+            write_masterlist(config.masterlist_path, records, sync_excel=False)
 
     if not config.dry_run:
         write_masterlist(config.masterlist_path, records)
@@ -1809,6 +2462,39 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar="RECORD_ID",
         help="Download then analyze the given Record ID in one step.",
     )
+    parser.add_argument(
+        "--bulk-intake",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Path to a text file with one product URL per line (or '-' for stdin); appends Pending rows.",
+    )
+    parser.add_argument(
+        "--bulk-fetch-remote",
+        action="store_true",
+        help="With --bulk-intake, fetch each page to enrich product/shop names (slower).",
+    )
+    parser.add_argument(
+        "--skip-captions",
+        action="store_true",
+        help="Disable Gemini caption-pack generation (offline / quick render only).",
+    )
+    parser.add_argument(
+        "--skip-hooks",
+        action="store_true",
+        help="Disable Gemini hook overlay generation; videos render without the top hook text.",
+    )
+    parser.add_argument(
+        "--skip-cover",
+        action="store_true",
+        help="Skip the cover.jpg thumbnail render after the video.",
+    )
+    parser.add_argument(
+        "--captions-model",
+        type=str,
+        default=CAPTIONS_PRIMARY_MODEL,
+        help=f"Override the caption-generation model (default: {CAPTIONS_PRIMARY_MODEL}).",
+    )
     return parser.parse_args(argv)
 
 
@@ -1822,7 +2508,42 @@ def main(argv: list[str] | None = None) -> int:
         force=args.force,
         dry_run=args.dry_run,
         render_mode=args.render_mode,
+        skip_captions=getattr(args, "skip_captions", False),
+        captions_model=getattr(args, "captions_model", CAPTIONS_PRIMARY_MODEL),
+        skip_hooks=getattr(args, "skip_hooks", False),
+        skip_cover=getattr(args, "skip_cover", False),
     )
+
+    # Bulk-intake mode: read URLs from file/stdin, append rows, exit
+    bulk_path = getattr(args, "bulk_intake", None)
+    if bulk_path is not None:
+        try:
+            if str(bulk_path) == "-":
+                text = sys.stdin.read()
+            else:
+                text = bulk_path.read_text(encoding="utf-8")
+            urls = parse_url_lines(text)
+            results = bulk_intake_rows(
+                urls,
+                config.masterlist_path,
+                fetch_remote=getattr(args, "bulk_fetch_remote", False),
+            )
+        except Exception as exc:
+            print(f"Bulk intake failed: {exc}", file=sys.stderr)
+            return 1
+        added = sum(1 for r in results if r.get("status") == "added")
+        skipped = sum(1 for r in results if r.get("status") == "skipped")
+        errors = sum(1 for r in results if r.get("status") == "error")
+        for entry in results:
+            status = entry.get("status", "")
+            if status == "added":
+                print(f"  + {entry.get('record_id', '?')}  {entry['url']}  ({entry.get('product_name', '')})")
+            elif status == "skipped":
+                print(f"  = (skip) {entry['url']}")
+            else:
+                print(f"  ! (error) {entry['url']}: {entry.get('message', '')}")
+        print(f"Bulk intake: {added} added, {skipped} skipped, {errors} error(s).")
+        return 0
 
     # Analyze-only mode
     analyze_id = getattr(args, "analyze_record_id", None)
