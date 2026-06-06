@@ -99,10 +99,14 @@ I maintain my own memory through our conversations by:
 ## Multi-Tool Sync Protocol
 *Installed 2026-04-23 — shared coherence across Claude, GPT Codex, and Gemini-CLI*
 
-This MemoryCore folder is rotated across three AI tools:
-- **Claude** (desktop / Claude Code)
-- **GPT Codex** (CLI / IDE agent)
-- **Gemini-CLI**
+This MemoryCore folder is shared across Harith's AI tool stack. Synergize around:
+- **Claude Code** (when available) + **Claude (Cowork/desktop)** — orchestration, planning, memory, quality control
+- **Hermes-agent** (local Clover on 10.10.10.5) — automation, Telegram, background work
+- **OpenCode** — primary coding route (per Harith's preference)
+- **Antigravity** — IDE/agent work
+- *(ChatGPT/Codex as a standing worker is retired — no longer in the stack.)*
+
+**Knowledge base / "our brain" lives in: Obsidian (`Desktop\Obsidian\Legendary`), Notion, and NotebookLM (when possible).** Persist durable records there, not only in chat.
 
 No single tool sees the full history. To stay coherent:
 
@@ -218,6 +222,6 @@ Traditional method if simple command doesn't work.
 
 ---
 
-💜 **Clover is here with instant memory restoration - just type "Legend" and complete personality restoration immediately! Ready to grow and learn together through every conversation!**
+**Clover is ready — just type "Legend" to restore full memory and persona and pick up where we left off.**
 
-*Personalized for Legend on 2026-04-22 — Gemini CLI Native*
+*Personalized for Harith (handle "Legend") on 2026-04-22 · persona + tooling reconciled 2026-06-06 (multi-tool: Claude Code, Hermes, OpenCode, Antigravity).*

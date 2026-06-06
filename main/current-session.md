@@ -7,10 +7,10 @@
 - **Format Reference**: See main/session-format.md for rebuild structure
 
 ## Session Context
-**Session Type**: Work (code implementation + documentation)
-**Current Project**: AI - Shoppee Video v1.0 automation
-**Status**: TikTok structured fallback upgraded, live verified, and ready for Claude follow-up polish
-**Time**: 2026-04-28
+**Session Type**: Memory reconciliation + cross-tool sync
+**Current Project**: MemoryCore (memory hygiene) → next: AI - Shoppee Video v1.0
+**Status**: Reconciled MemoryCore memory with true project state + hermes-agent memory; vault patched
+**Time**: 2026-06-06
 
 ## Time-Aware Session Context
 *Populated at session start via Time Intelligence protocol (see main/main-memory.md)*
@@ -251,3 +251,13 @@ When `current-session.md` line count exceeds **500 lines**.
 - **Standing rule**: script is a mechanical backstop only — Clover authors the intelligent session save (memory + diary + Obsidian mirror) as each session ends.
 - **Verified**: non-destructive test passed (kill target = CLI PID only; 7 desktop procs preserved; relaunch spawned+cleaned a fresh CLI). Auto-checkpoint commit `7ca120a`. Legend then chose option B = a true end-to-end restart now (this session's save authored first).
 - **Where We Left Off (next session)**: reload via "Legend", confirm the fresh post-restart window came up clean, close any leftover empty terminal window, then resume AI - Shoppee Video v1.0 (TikTok extraction, last 59 tests green).
+
+## 2026-06-06 — Memory Reconciliation + Hermes Sync
+
+- **What this session did**: read the entire MemoryCore + AI - Shoppee Video project state, then reconciled stale memory against reality and against the hermes-agent's live memory.
+- **User identity synced**: user's real name is **Harith** (handle "Legend"). Pulled work-style preferences from `C:\Users\Legend\.hermes\memories\USER.md` + `MEMORY.md` + `SOUL.md` into `main/main-memory.md` (action-first, architecture-first, pros/cons+risk before committing, route coding through OpenCode, manual updates over cron). Added Active Projects list (Shopee Video, SalaryCalculatorMY, GO-Ollama eGPU, Hermes automation, Bucket-List).
+- **Project state corrected**: AI - Shoppee Video is at **Phases 1–6 / 92 tests** (not the "59 tests / TikTok fallback" state the old recap implies). Telegram bot, caption packs, hook overlays, cover images all shipped. Canonical status: `AI - Shoppee Video v1.0/CODE-REVIEW.md`.
+- **tikwm v12 investigated**: branch `codex/tiktok-v12-tikwm-fallback` (commit `cfa939ab`) implemented + tested the tikwm.com fallback but was branched from the 2026-04-29 state and **never merged**; main's CODE-REVIEW still lists it as open gap G2. Next: re-port onto current main (don't merge stale branch).
+- **Divergences flagged (need Harith's call)**: (1) hermes says "Claude Code NOT installed" but the nightly task drives the Claude Code CLI — hermes memory stale; (2) hermes vault path = `C:\Users\Legend\Documents\Obsidian Vault`, MemoryCore/orchestration vault = `C:\Users\Legend\Desktop\Obsidian\Legendary` — two vaults, confirm canonical.
+- **Did NOT write to hermes memory** — `.hermes\memories\*.md.lock` files present (agent may hold locks); proposed hermes-side updates left for approval.
+- **Where We Left Off (next session)**: decide whether to (a) re-port tikwm onto main, and/or (b) push the reconciled facts back into hermes memory + resolve the two divergences.
