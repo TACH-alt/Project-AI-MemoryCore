@@ -66,10 +66,10 @@ Shopee-specific coverage is solid: product-URL query stripping, mobile headers, 
 - **Fix G1.** Refactor the single-row download+analyze path to call the same hook + caption + cover block as `process_pending_rows` (extract that block into one shared function and call it from both). This is the highest-value fix: it makes the button you use daily produce full-quality output.
 
 ### 🟡 Soon (each ≤1 hr) — Shopee reliability
-- **Multi-candidate video fallback** (issue #3): return an ordered list; on download failure, try the next.
-- **Resolution-aware selection** (issue #2): ffprobe the top 2–3 candidates and keep the highest real resolution, or parse a true resolution token.
 - **Discovery diagnostics + resilience** (issue #4): 1 retry with a rotated User-Agent; when 0 media found, dump the fetched HTML to `raw/_debug_page.html` so breakage is debuggable in seconds.
 - **Startup preflight** (issue #6): check ffmpeg/ffprobe/font once at launch; print a clear warning if missing.
+
+> Descoped per Harith (2026-06-06): resolution-aware "best video" selection and multi-candidate video fallback (issues #2/#3) — not pursued.
 
 ### 🟢 Later — robustness & scale (from `CODE-REVIEW.md`)
 - **State + `--resume`** (R1): crash-safe, idempotent batches keyed by URL hash → stage. Friendly to scheduled runs.

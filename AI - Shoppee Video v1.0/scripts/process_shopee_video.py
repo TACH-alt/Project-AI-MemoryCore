@@ -29,6 +29,13 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 AUDIO_EXTENSIONS = {".aac", ".m4a", ".mp3", ".opus", ".ogg", ".wav", ".webm"}
 MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
 RENDER_MODES = frozenset({"auto", "light", "vertical-blur", "passthrough"})
+# Hard ceiling for a single downloaded media file. Affiliate clips are tens of MB;
+# anything past this is almost certainly the wrong asset (full catalogue, zip, etc.).
+MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024  # 500 MB
+# Max product images pulled for the slideshow (3s each → keeps it a sensible length).
+MAX_SLIDESHOW_IMAGES = 8
+# Finished videos are also copied here, under <Shop>/<Product>/, for easy access.
+DESKTOP_OUTPUT_DIRNAME = "Shopee Video Output"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShopeeVideoWorkflow/1.0"
 SHOPEE_PAGE_USER_AGENT = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
@@ -80,6 +87,7 @@ class WorkflowConfig:
     captions_model: str = CAPTIONS_PRIMARY_MODEL
     skip_hooks: bool = False
     skip_cover: bool = False
+    copy_to_desktop: bool = True
 
 
 def safe_filename(value: str) -> str:
@@ -946,6 +954,13 @@ def download_url(url: str, target_dir: Path, fallback_name: str = "media") -> Pa
     try:
         with request_url(url) as response:
             content_type = response.headers.get("content-type", "").lower()
+            # Reject oversized assets up front when the server declares a size.
+            declared = response.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > MAX_DOWNLOAD_BYTES:
+                raise RuntimeError(
+                    f"File too large: {int(declared)} bytes exceeds the "
+                    f"{MAX_DOWNLOAD_BYTES} byte limit ({url})"
+                )
             suffix = Path(filename).suffix.lower()
             if suffix not in MEDIA_EXTENSIONS:
                 suffix = extension_from_content_type(content_type)
@@ -955,6 +970,13 @@ def download_url(url: str, target_dir: Path, fallback_name: str = "media") -> Pa
                 shutil.copyfileobj(response, output)
     except (HTTPError, URLError, TimeoutError) as exc:
         raise RuntimeError(f"Download failed: {exc}") from exc
+    # Guard against servers that omit content-length: enforce the ceiling post-write.
+    if target_path.stat().st_size > MAX_DOWNLOAD_BYTES:
+        size = target_path.stat().st_size
+        target_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"File too large: {size} bytes exceeds the {MAX_DOWNLOAD_BYTES} byte limit ({url})"
+        )
     return target_path
 
 
@@ -1031,13 +1053,24 @@ def video_quality_score(url: str) -> int:
 
 
 def select_media_urls_for_download(media_urls: list[str]) -> list[str]:
+    """Pick media to download: the best single video (if any) PLUS product images.
+
+    Both types are kept so the renderer can edit the video on its own and turn the
+    product images into one slideshow. Images are capped at MAX_SLIDESHOW_IMAGES.
+    """
     video_urls = [
         url for url in media_urls
         if Path(unquote(urlparse(url).path)).suffix.lower() in VIDEO_EXTENSIONS
     ]
+    image_urls = [
+        url for url in media_urls
+        if Path(unquote(urlparse(url).path)).suffix.lower() in IMAGE_EXTENSIONS
+    ]
+    selected: list[str] = []
     if video_urls:
-        return [max(video_urls, key=video_quality_score)]
-    return media_urls[:5]
+        selected.append(max(video_urls, key=video_quality_score))
+    selected.extend(image_urls[:MAX_SLIDESHOW_IMAGES])
+    return selected
 
 
 def is_site_chrome_media_url(url: str) -> bool:
@@ -1659,6 +1692,90 @@ def append_log(log_path: Path, row: MasterRow, status: str, message: str, output
             message,
             output_file,
         ])
+
+
+def classify_error(message: str) -> str:
+    """Map a failure message to a stable error category for the error log."""
+    text = (message or "").lower()
+    if "too large" in text:
+        return "FILE_TOO_LARGE"
+    if "missing product name" in text or "missing shop name" in text or "missing product or shop" in text:
+        return "MISSING_FIELDS"
+    if "did not expose downloadable" in text or "no downloadable media" in text or "could not be downloaded" in text:
+        return "NO_MEDIA"
+    if "page fetch failed" in text:
+        return "FETCH_FAILED"
+    if "download failed" in text:
+        return "DOWNLOAD_FAILED"
+    if "ffmpeg failed" in text or "ffmpeg timed out" in text:
+        return "RENDER_FAILED"
+    if "ffmpeg is not installed" in text or "ffmpeg not available" in text:
+        return "RENDER_SKIPPED"
+    return "UNKNOWN"
+
+
+def append_error_log(
+    error_log_path: Path,
+    row: MasterRow,
+    platform: str,
+    category: str,
+    message: str,
+) -> None:
+    """Append a structured failure/warning entry to logs/error-log.csv."""
+    error_log_path.parent.mkdir(parents=True, exist_ok=True)
+    exists = error_log_path.exists()
+    with error_log_path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        if not exists:
+            writer.writerow(
+                ["timestamp", "record_id", "product_link", "platform", "category", "message"]
+            )
+        writer.writerow([
+            datetime.now().isoformat(timespec="seconds"),
+            row.record_id,
+            row.product_link,
+            platform,
+            category,
+            (message or "").replace("\n", " ").strip(),
+        ])
+
+
+def desktop_output_root() -> Path:
+    """Folder on the user's Desktop where finished videos are mirrored."""
+    return Path.home() / "Desktop" / DESKTOP_OUTPUT_DIRNAME
+
+
+def copy_outputs_to_desktop(
+    shop_name: str,
+    product_name: str,
+    edited_files: Iterable[Path],
+    raw_files: Iterable[Path],
+    root: Path | None = None,
+) -> Path | None:
+    """Copy edited + raw media to Desktop/Shopee Video Output/<Shop>/<Product>/.
+
+    Best-effort: never raises — a Desktop-copy failure must not fail the row.
+    Returns the product destination folder, or None on failure / nothing to copy.
+    """
+    edited_list = [p for p in edited_files if p and Path(p).exists()]
+    raw_list = [p for p in raw_files if p and Path(p).exists()]
+    if not edited_list and not raw_list:
+        return None
+    try:
+        base = (root or desktop_output_root()) / safe_filename(shop_name) / safe_filename(product_name)
+        if edited_list:
+            edited_dest = base / "edited"
+            edited_dest.mkdir(parents=True, exist_ok=True)
+            for path in edited_list:
+                shutil.copy2(path, edited_dest / path.name)
+        if raw_list:
+            raw_dest = base / "raw"
+            raw_dest.mkdir(parents=True, exist_ok=True)
+            for path in raw_list:
+                shutil.copy2(path, raw_dest / path.name)
+        return base
+    except OSError:
+        return None
 
 
 def update_record(record: dict[str, str], status: str, notes: str, output_folder: Path | None, output_files: Iterable[Path]) -> None:
@@ -2325,9 +2442,110 @@ def render_cover_image(mp4_path: Path, hook_text: str | None, output_path: Path)
     return output_path
 
 
+def render_and_enrich_row(
+    config: WorkflowConfig,
+    record: dict[str, str],
+    row: MasterRow,
+    platform: str,
+    product_folder: Path,
+    raw_files: list[Path],
+    log_path: Path | None = None,
+    error_log_path: Path | None = None,
+) -> tuple[str, list[Path]]:
+    """Render downloaded media and apply all enrichments (hook, caption pack, cover).
+
+    Single source of truth shared by the batch workflow (``process_pending_rows``)
+    and the single-row ``--download-and-analyze-record-id`` path, so both produce
+    identical, fully-enriched output. Updates ``record`` status, writes
+    ``product-info.md``, and (when ``log_path`` is given) appends a run-log entry.
+    Returns ``(status_message, edited_files)``.
+    """
+    raw_dir = product_folder / "raw"
+    edited_dir = product_folder / "edited"
+
+    # Detect TikTok photo-mode: yt-dlp returned images rather than video
+    photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
+    caption = build_caption(row.product_name, row.shop_name)
+
+    # Hook generation (cached on the row): reuse Hook column on rerun, otherwise call LLM.
+    hook_text: str | None = (record.get("Hook") or "").strip() or None
+    if not hook_text and not config.skip_hooks:
+        hook_text = generate_hook(record, platform, model=config.captions_model)
+        if hook_text:
+            record["Hook"] = hook_text
+
+    edited_files: list[Path] = []
+    photo_images: list[Path] = []
+    if photo_mode:
+        clear_rendered_outputs(edited_dir)
+        photo_images = group_photo_mode_images(raw_files[0], raw_dir)
+        rendered = render_photo_mode_slideshow(photo_images, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
+        if rendered:
+            edited_files.append(rendered)
+    else:
+        # Shopee/Direct: render each video file on its own, and combine all image
+        # files into ONE slideshow MP4 (silent when no background audio exists).
+        video_files = [f for f in raw_files if f.suffix.lower() in VIDEO_EXTENSIONS]
+        image_files = [f for f in raw_files if f.suffix.lower() in IMAGE_EXTENSIONS]
+        for raw_file in video_files:
+            rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
+            if rendered:
+                edited_files.append(rendered)
+        if image_files:
+            slideshow = render_photo_mode_slideshow(image_files, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
+            if slideshow:
+                edited_files.append(slideshow)
+
+    if edited_files:
+        if photo_mode:
+            message = build_photo_mode_status_message(
+                image_count=len(photo_images),
+                edited_count=len(edited_files),
+                has_audio=find_background_audio(raw_dir) is not None,
+            )
+        else:
+            message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
+        update_record(record, "Edited", message, product_folder, edited_files)
+        if log_path is not None:
+            append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
+        # Best-effort caption pack — never fail the row on caption errors.
+        if not config.skip_captions:
+            captions_path, captions_error = write_captions_pack(
+                product_folder, record, platform, model=config.captions_model
+            )
+            if captions_error:
+                print(f"Row {row.row_number}: captions skipped — {captions_error}")
+            elif captions_path:
+                print(f"Row {row.row_number}: captions written to {captions_path.name}")
+        # Best-effort cover image — only for video outputs (skip image-derived photo-mode for now).
+        if not config.skip_cover and edited_files and not photo_mode:
+            cover_path = edited_dir / "cover.jpg"
+            cover = render_cover_image(edited_files[0], hook_text, cover_path)
+            if cover:
+                print(f"Row {row.row_number}: cover image written to {cover.name}")
+    else:
+        message = "Downloaded raw media; FFmpeg is not installed or no renderable media was found"
+        update_record(record, "Downloaded", message, product_folder, raw_files)
+        if log_path is not None:
+            append_log(log_path, row, "Downloaded", message, "; ".join(str(path) for path in raw_files))
+        if error_log_path is not None:
+            append_error_log(error_log_path, row, platform, "RENDER_SKIPPED", message)
+
+    write_product_info(product_folder, record, platform)
+
+    # Mirror finished media to the Desktop (best-effort, never fails the row).
+    if config.copy_to_desktop:
+        desktop_dest = copy_outputs_to_desktop(row.shop_name, row.product_name, edited_files, raw_files)
+        if desktop_dest:
+            print(f"Row {row.row_number}: copied to Desktop -> {desktop_dest}")
+
+    return message, edited_files
+
+
 def process_pending_rows(config: WorkflowConfig) -> int:
     records = read_masterlist(config.masterlist_path)
     log_path = config.project_root / "logs" / "run-log.csv"
+    error_log_path = config.project_root / "logs" / "error-log.csv"
     processed = 0
 
     for index, record in enumerate(records, start=2):
@@ -2341,13 +2559,13 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             if not config.dry_run:
                 update_record(record, "Failed", message, None, [])
                 append_log(log_path, row, "Failed", message)
+                append_error_log(error_log_path, row, detect_platform(row.product_link), "MISSING_FIELDS", message)
             print(f"Row {row.row_number}: {message}")
             continue
 
         platform = detect_platform(row.product_link)
         product_folder = resolve_product_folder(config.project_root / "output", platform, row.shop_name, row.product_name)
         raw_dir = product_folder / "raw"
-        edited_dir = product_folder / "edited"
 
         if config.dry_run:
             print(f"Row {row.row_number}: would process {row.product_link} -> {product_folder}")
@@ -2357,67 +2575,16 @@ def process_pending_rows(config: WorkflowConfig) -> int:
             raw_files = collect_media(row, raw_dir)
             if not raw_files:
                 raise RuntimeError(no_media_message(row.product_link))
-
-            # Detect TikTok photo-mode: yt-dlp returned images rather than video
-            photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
-
-            caption = build_caption(row.product_name, row.shop_name)
-
-            # Hook generation (cached on the row): reuse Hook column on rerun, otherwise call LLM.
-            hook_text: str | None = (record.get("Hook") or "").strip() or None
-            if not hook_text and not config.skip_hooks:
-                hook_text = generate_hook(record, platform, model=config.captions_model)
-                if hook_text:
-                    record["Hook"] = hook_text
-
-            edited_files = []
-            if photo_mode:
-                clear_rendered_outputs(edited_dir)
-                photo_images = group_photo_mode_images(raw_files[0], raw_dir)
-                rendered = render_photo_mode_slideshow(photo_images, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
-                if rendered:
-                    edited_files.append(rendered)
-            else:
-                for raw_file in raw_files:
-                    rendered = render_video(raw_file, edited_dir, caption, render_mode=config.render_mode, hook_text=hook_text)
-                    if rendered:
-                        edited_files.append(rendered)
-            if edited_files:
-                if photo_mode:
-                    message = build_photo_mode_status_message(
-                        image_count=len(photo_images),
-                        edited_count=len(edited_files),
-                        has_audio=find_background_audio(raw_dir) is not None,
-                    )
-                else:
-                    message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
-                update_record(record, "Edited", message, product_folder, edited_files)
-                append_log(log_path, row, "Edited", message, "; ".join(str(path) for path in edited_files))
-                # Best-effort caption pack — never fail the row on caption errors.
-                if not config.skip_captions:
-                    captions_path, captions_error = write_captions_pack(
-                        product_folder, record, platform, model=config.captions_model
-                    )
-                    if captions_error:
-                        print(f"Row {row.row_number}: captions skipped — {captions_error}")
-                    elif captions_path:
-                        print(f"Row {row.row_number}: captions written to {captions_path.name}")
-                # Best-effort cover image — only for video outputs (skip image-derived photo-mode for now).
-                if not config.skip_cover and edited_files and not photo_mode:
-                    cover_path = edited_dir / "cover.jpg"
-                    cover = render_cover_image(edited_files[0], hook_text, cover_path)
-                    if cover:
-                        print(f"Row {row.row_number}: cover image written to {cover.name}")
-            else:
-                message = "Downloaded raw media; FFmpeg is not installed or no renderable media was found"
-                update_record(record, "Downloaded", message, product_folder, raw_files)
-                append_log(log_path, row, "Downloaded", message, "; ".join(str(path) for path in raw_files))
-            write_product_info(product_folder, record, platform)
+            message, _edited_files = render_and_enrich_row(
+                config, record, row, platform, product_folder, raw_files,
+                log_path=log_path, error_log_path=error_log_path,
+            )
             print(f"Row {row.row_number}: {message}")
         except Exception as exc:
             message = str(exc)
             update_record(record, "Failed", message, product_folder, [])
             append_log(log_path, row, "Failed", message)
+            append_error_log(error_log_path, row, platform, classify_error(message), message)
             print(f"Row {row.row_number}: Failed - {message}")
 
         # Incremental write so the frontend sees live progress mid-batch (CSV only; xlsm synced at end)
@@ -2490,6 +2657,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Skip the cover.jpg thumbnail render after the video.",
     )
     parser.add_argument(
+        "--no-desktop-copy",
+        action="store_true",
+        help=f"Do not mirror finished videos to Desktop\\{DESKTOP_OUTPUT_DIRNAME}\\<Shop>\\<Product>\\.",
+    )
+    parser.add_argument(
         "--captions-model",
         type=str,
         default=CAPTIONS_PRIMARY_MODEL,
@@ -2512,6 +2684,7 @@ def main(argv: list[str] | None = None) -> int:
         captions_model=getattr(args, "captions_model", CAPTIONS_PRIMARY_MODEL),
         skip_hooks=getattr(args, "skip_hooks", False),
         skip_cover=getattr(args, "skip_cover", False),
+        copy_to_desktop=not getattr(args, "no_desktop_copy", False),
     )
 
     # Bulk-intake mode: read URLs from file/stdin, append rows, exit
@@ -2565,6 +2738,10 @@ def main(argv: list[str] | None = None) -> int:
     # Download + Analyze mode
     dl_analyze_id = getattr(args, "download_and_analyze_record_id", None)
     if dl_analyze_id:
+        log_path = project_root / "logs" / "run-log.csv"
+        error_log_path = project_root / "logs" / "error-log.csv"
+        row_for_log: MasterRow | None = None
+        platform_for_log = ""
         try:
             records = read_masterlist(config.masterlist_path)
             record = find_record_by_id(records, dl_analyze_id)
@@ -2572,7 +2749,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Record ID {dl_analyze_id} not found in masterlist.", file=sys.stderr)
                 return 1
             row = master_row_from_record(record, 0)
+            row_for_log = row
             platform = detect_platform(row.product_link)
+            platform_for_log = platform
             product_folder = resolve_product_folder(
                 project_root / "output", platform, row.shop_name, row.product_name
             )
@@ -2580,38 +2759,18 @@ def main(argv: list[str] | None = None) -> int:
             raw_files = collect_media(row, raw_dir)
             if not raw_files:
                 raise RuntimeError(no_media_message(row.product_link))
-            caption = build_caption(row.product_name, row.shop_name)
-            edited_files = []
-            photo_mode = is_tiktok_photo_mode_result(row.product_link, raw_files)
-            if photo_mode:
-                clear_rendered_outputs(product_folder / "edited")
-                photo_images = group_photo_mode_images(raw_files[0], raw_dir)
-                rendered = render_photo_mode_slideshow(photo_images, product_folder / "edited", caption, render_mode=config.render_mode)
-                if rendered:
-                    edited_files.append(rendered)
-            else:
-                for raw_file in raw_files:
-                    rendered = render_video(raw_file, product_folder / "edited", caption, render_mode=config.render_mode)
-                    if rendered:
-                        edited_files.append(rendered)
-            if edited_files:
-                if photo_mode:
-                    message = build_photo_mode_status_message(
-                        image_count=len(photo_images),
-                        edited_count=len(edited_files),
-                        has_audio=find_background_audio(raw_dir) is not None,
-                    )
-                else:
-                    message = f"Downloaded {len(raw_files)} media file(s); edited {len(edited_files)} video file(s)"
-                update_record(record, "Edited", message, product_folder, edited_files)
-            else:
-                message = "Downloaded raw media; FFmpeg not available or no renderable media"
-                update_record(record, "Downloaded", message, product_folder, raw_files)
-            write_product_info(product_folder, record, platform)
+            # Use the same render+enrich path as the batch workflow so the single-row
+            # button produces hook overlay + caption pack + cover image, not a bare video.
+            message, _edited_files = render_and_enrich_row(
+                config, record, row, platform, product_folder, raw_files,
+                log_path=log_path, error_log_path=error_log_path,
+            )
             analyze_row_record(project_root, record)
             write_masterlist(config.masterlist_path, records)
-            print(f"Download + Analyze complete for {dl_analyze_id}.")
+            print(f"Download + Analyze complete for {dl_analyze_id}: {message}")
         except Exception as exc:
+            if row_for_log is not None:
+                append_error_log(error_log_path, row_for_log, platform_for_log, classify_error(str(exc)), str(exc))
             print(f"Download + Analyze failed: {exc}", file=sys.stderr)
             return 1
         return 0

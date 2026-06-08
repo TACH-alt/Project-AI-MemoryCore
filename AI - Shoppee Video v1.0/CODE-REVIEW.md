@@ -10,6 +10,19 @@ and leave it in place — don't delete history.
 
 ---
 
+## Update — 2026-06-06 — G1 fix + error log + Desktop mirror
+
+**By:** Clover (Claude) · **Tests:** 98/98 passing (live-run on Windows, Python 3.14.4 / pytest 9.0.3)
+
+- ✅ **G1 fixed** — extracted shared `render_and_enrich_row()`; both batch and single-row `--download-and-analyze-record-id` paths now produce hook + caption pack + cover. Guard test `DownloadAndAnalyzeWiringTests`.
+- ✅ **Categorized error log** — `logs/error-log.csv` (`timestamp, record_id, product_link, platform, category, message`). `classify_error()` buckets failures into `FILE_TOO_LARGE`, `NO_MEDIA`, `DOWNLOAD_FAILED`, `FETCH_FAILED`, `RENDER_FAILED`, `RENDER_SKIPPED`, `MISSING_FIELDS`, `UNKNOWN`. Wired into batch + single-row paths.
+- ✅ **File-size guard** — `MAX_DOWNLOAD_BYTES = 500 MB`; `download_url` rejects oversized assets by declared `content-length` and by post-write size → logged as `FILE_TOO_LARGE`.
+- ✅ **Desktop mirror** — finished media copied to `Desktop\Shopee Video Output\<Shop>\<Product>\{edited,raw}\` (best-effort, never fails a row). Toggle off with `--no-desktop-copy`.
+- New tests: `ErrorLogAndDesktopTests` (classify, oversize guard, copy mirror, empty-copy, error-log append).
+- ✅ **Hybrid media (download both types)** — `select_media_urls_for_download` now keeps the best video **and** product images (capped `MAX_SLIDESHOW_IMAGES = 8`). In render, each video renders on its own and all images are combined into **one** slideshow MP4 (`render_photo_mode_slideshow`, silent when no audio). TikTok photo-mode path unchanged. Tests `HybridRenderTests` + updated `select_media_urls_keeps_best_video_and_images`. Suite now **99/99**.
+
+---
+
 ## Review #1 — 2026-05-06 — Post-Phase-4 Audit + Phase-5 Research
 
 **Reviewer:** Claude Opus 4.7
@@ -76,7 +89,7 @@ and leave it in place — don't delete history.
 
 | ID | Gap | Severity | Effort | Status |
 |----|-----|----------|--------|--------|
-| **G1** | `--download-and-analyze-record-id` mode (frontend "Save + Download + Analyze" button) does NOT generate hooks / captions / cover. Single-row workflow ships a bare video. | **High** — real button users click | ~30 min — refactor to share render block with `process_pending_rows` | ⬜ Open |
+| **G1** | `--download-and-analyze-record-id` mode (frontend "Save + Download + Analyze" button) does NOT generate hooks / captions / cover. Single-row workflow ships a bare video. | **High** — real button users click | ~30 min — refactor to share render block with `process_pending_rows` | ✅ **Fixed 2026-06-06** — extracted shared `render_and_enrich_row()`; both batch and single-row paths now route through it (hook + caption pack + cover). Regression test `DownloadAndAnalyzeWiringTests` added; suite 93/93 green. |
 | **G2** | tikwm.com fallback for TikTok WAF blocks designed in `CODEX-PLAN-v1.2-tikwm-fallback.md` but never implemented. WAF flap → entire row fails. | Medium | ~2 hrs (plan exists) | ⬜ Open |
 | **G3** | No end-to-end batch test running `process_pending_rows` from a temp masterlist with all phases enabled (mocked LLM + mocked FFmpeg). Orchestration regressions could slip through. | Medium | ~45 min | ⬜ Open |
 | **G4** | No "🪝 Regenerate hook" button on the frontend; user must edit CSV cell manually to retry a bad hook. Same for `/regenerate <RID>` in the bot. | Low | ~20 min combined | ⬜ Open |

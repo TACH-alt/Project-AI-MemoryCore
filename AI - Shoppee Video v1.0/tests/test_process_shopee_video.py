@@ -743,7 +743,7 @@ class HelperTests(unittest.TestCase):
             ],
         )
 
-    def test_select_media_urls_downloads_single_best_video_when_available(self):
+    def test_select_media_urls_keeps_best_video_and_images(self):
         urls = select_media_urls_for_download(
             [
                 "https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600318.mp4",
@@ -751,9 +751,13 @@ class HelperTests(unittest.TestCase):
                 "https://down-my.img.susercontent.com/file/my-11134207-demo@resize_w1200_nl.webp",
             ]
         )
+        # Best (highest-token) video first, then the product image(s) for the slideshow.
         self.assertEqual(
             urls,
-            ["https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4"],
+            [
+                "https://down-ws-sg.vod.susercontent.com/api/v4/11110105/mms/demo.1600325.mp4",
+                "https://down-my.img.susercontent.com/file/my-11134207-demo@resize_w1200_nl.webp",
+            ],
         )
 
     def test_ffmpeg_command_uses_complex_filter_for_composited_canvas(self):
@@ -1234,6 +1238,196 @@ class TelegramHelpersTests(unittest.TestCase):
         # Inside a code block, only ` and \ need escaping; periods and parens are fine.
         self.assertEqual(escape_md_v2_code("a.b!c"), "a.b!c")
         self.assertEqual(escape_md_v2_code("here is `code`"), "here is \\`code\\`")
+
+
+class DownloadAndAnalyzeWiringTests(unittest.TestCase):
+    """Regression guard for G1: the single-row download+analyze path must run the
+    same enrich block (hook + caption pack + cover) as the batch workflow."""
+
+    def _write_masterlist(self, masterlist: Path) -> None:
+        import process_shopee_video as psv
+
+        masterlist.parent.mkdir(parents=True, exist_ok=True)
+        with masterlist.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=list(psv.REQUIRED_COLUMNS))
+            writer.writeheader()
+            row = {col: "" for col in psv.REQUIRED_COLUMNS}
+            row["Record ID"] = "ASV-0000001"
+            row["Product Link"] = "https://shopee.com.my/widget-i.1.2"
+            row["Product Name"] = "Widget"
+            row["Shop Name"] = "Cool Shop"
+            row["Status"] = "Pending"
+            writer.writerow(row)
+
+    def test_download_and_analyze_uses_shared_enrich_path(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._write_masterlist(masterlist)
+            fake_raw = [root / "raw" / "video.mp4"]
+
+            with patch.object(psv, "collect_media", return_value=fake_raw), \
+                    patch.object(psv, "render_and_enrich_row", return_value=("edited 1 video file(s)", fake_raw)) as enrich, \
+                    patch.object(psv, "analyze_row_record") as analyze:
+                rc = psv.main([
+                    "--project-root", str(root),
+                    "--masterlist", str(masterlist),
+                    "--download-and-analyze-record-id", "ASV-0000001",
+                ])
+
+            self.assertEqual(rc, 0)
+            # The single-row button must go through the shared enrich helper (hook/captions/cover),
+            # and analysis must still run afterwards.
+            enrich.assert_called_once()
+            analyze.assert_called_once()
+
+
+class _FakeResponse:
+    def __init__(self, headers: dict, body: bytes = b""):
+        self.headers = headers
+        self._body = body
+
+    def read(self, *args, **kwargs) -> bytes:
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args) -> bool:
+        return False
+
+
+class ErrorLogAndDesktopTests(unittest.TestCase):
+    def test_classify_error_categories(self):
+        import process_shopee_video as psv
+
+        self.assertEqual(psv.classify_error("File too large: 999 bytes exceeds"), "FILE_TOO_LARGE")
+        self.assertEqual(
+            psv.classify_error("Shopee page did not expose downloadable product media"),
+            "NO_MEDIA",
+        )
+        self.assertEqual(psv.classify_error("Download failed: HTTP Error 404"), "DOWNLOAD_FAILED")
+        self.assertEqual(psv.classify_error("Page fetch failed: timed out"), "FETCH_FAILED")
+        self.assertEqual(psv.classify_error("FFmpeg failed for clip.mp4: bad data"), "RENDER_FAILED")
+        self.assertEqual(psv.classify_error("Missing Product Name or Shop Name"), "MISSING_FIELDS")
+        self.assertEqual(psv.classify_error("something unexpected"), "UNKNOWN")
+
+    def test_download_url_rejects_oversized_declared_file(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+
+        headers = {"content-type": "video/mp4", "content-length": str(psv.MAX_DOWNLOAD_BYTES + 1)}
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(psv, "request_url", return_value=_FakeResponse(headers)):
+                with self.assertRaises(RuntimeError) as ctx:
+                    psv.download_url("https://cdn.example.com/huge.mp4", Path(tmp))
+            self.assertIn("too large", str(ctx.exception).lower())
+            self.assertEqual(psv.classify_error(str(ctx.exception)), "FILE_TOO_LARGE")
+            # Nothing should have been left on disk.
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_copy_outputs_to_desktop_mirrors_edited_and_raw(self):
+        import process_shopee_video as psv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop_root = Path(tmp) / "Desktop Output"
+            src = Path(tmp) / "src"
+            (src / "edited").mkdir(parents=True)
+            (src / "raw").mkdir(parents=True)
+            edited = src / "edited" / "clip_new.mp4"
+            edited.write_bytes(b"video")
+            raw = src / "raw" / "clip.mp4"
+            raw.write_bytes(b"raw")
+
+            dest = psv.copy_outputs_to_desktop("Cool Shop", "Mini Fan", [edited], [raw], root=desktop_root)
+
+            self.assertIsNotNone(dest)
+            self.assertTrue((desktop_root / "Cool Shop" / "Mini Fan" / "edited" / "clip_new.mp4").exists())
+            self.assertTrue((desktop_root / "Cool Shop" / "Mini Fan" / "raw" / "clip.mp4").exists())
+
+    def test_copy_outputs_to_desktop_returns_none_when_nothing_exists(self):
+        import process_shopee_video as psv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "nope.mp4"
+            self.assertIsNone(
+                psv.copy_outputs_to_desktop("Shop", "Prod", [missing], [], root=Path(tmp) / "out")
+            )
+
+    def test_append_error_log_writes_header_and_categorized_row(self):
+        import process_shopee_video as psv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            elog = Path(tmp) / "logs" / "error-log.csv"
+            row = psv.MasterRow(
+                row_number=2,
+                record_id="ASV-0000001",
+                product_link="https://shopee.com.my/x-i.1.2",
+                product_name="X",
+                shop_name="Shop",
+                source_type="",
+                status="Pending",
+                data={},
+            )
+            psv.append_error_log(elog, row, "Shopee", "NO_MEDIA", "no media found")
+            lines = elog.read_text(encoding="utf-8").splitlines()
+            self.assertIn("category", lines[0])
+            self.assertIn("NO_MEDIA", lines[1])
+            self.assertIn("ASV-0000001", lines[1])
+
+
+class HybridRenderTests(unittest.TestCase):
+    """Shopee/Direct: each video renders on its own; all images become ONE slideshow."""
+
+    def test_render_and_enrich_splits_videos_and_images(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            product_folder = root / "output" / "Shopee" / "Shop" / "Prod"
+            raw_dir = product_folder / "raw"
+            raw_dir.mkdir(parents=True)
+            vid = raw_dir / "clip.mp4"
+            vid.write_bytes(b"v")
+            img1 = raw_dir / "a.jpg"
+            img1.write_bytes(b"i")
+            img2 = raw_dir / "b.jpg"
+            img2.write_bytes(b"i")
+            raw_files = [vid, img1, img2]
+
+            config = psv.WorkflowConfig(
+                project_root=root,
+                masterlist_path=root / "m.csv",
+                skip_captions=True,
+                skip_hooks=True,
+                skip_cover=True,
+                copy_to_desktop=False,
+            )
+            record = {col: "" for col in psv.REQUIRED_COLUMNS}
+            record["Record ID"] = "ASV-0000001"
+            record["Product Name"] = "Prod"
+            record["Shop Name"] = "Shop"
+            record["Product Link"] = "https://shopee.com.my/widget-i.1.2"
+            row = psv.master_row_from_record(record, 2)
+
+            with patch.object(psv, "render_video", side_effect=lambda raw, ed, *a, **k: ed / (raw.stem + "_new.mp4")) as rv, \
+                    patch.object(psv, "render_photo_mode_slideshow", return_value=product_folder / "edited" / "slide_new.mp4") as rs:
+                message, edited = psv.render_and_enrich_row(
+                    config, record, row, "Shopee", product_folder, raw_files
+                )
+
+            # Exactly one video rendered individually; images batched into one slideshow.
+            rv.assert_called_once()
+            self.assertEqual(rv.call_args[0][0], vid)
+            rs.assert_called_once()
+            slideshow_images = rs.call_args[0][0]
+            self.assertEqual([p.name for p in slideshow_images], ["a.jpg", "b.jpg"])
+            # Two edited outputs total: the video clip + the slideshow.
+            self.assertEqual(len(edited), 2)
 
 
 if __name__ == "__main__":
