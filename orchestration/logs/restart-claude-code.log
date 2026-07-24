@@ -30,3 +30,48 @@
 [2026-06-08 00:00:07] === Done ===
 [2026-06-09 00:00:02] === Nightly Claude Code restart triggered ===
 [2026-06-09 00:00:02] Running pre-restart checkpoint...
+[2026-06-09 00:00:03] No Claude Code CLI process found running.
+[2026-06-09 00:00:07] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-09 00:00:07] === Done ===
+[2026-06-10 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-10 00:00:02] Running pre-restart checkpoint...
+[2026-06-10 00:00:03] Pre-restart checkpoint completed.
+[2026-06-10 00:00:04] No Claude Code CLI process found running.
+[2026-06-10 00:00:06] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-10 00:00:06] === Done ===
+[2026-06-11 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-11 00:00:02] Running pre-restart checkpoint...
+[2026-06-11 00:00:03] Pre-restart checkpoint completed.
+[2026-06-11 00:00:03] No Claude Code CLI process found running.
+[2026-06-11 00:00:06] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-11 00:00:06] === Done ===
+[2026-06-12 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-12 00:00:02] Running pre-restart checkpoint...
+[2026-06-12 00:00:03] Pre-restart checkpoint completed.
+[2026-06-12 00:00:03] No Claude Code CLI process found running.
+[2026-06-12 00:00:05] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-12 00:00:05] === Done ===
+[2026-06-13 00:00:03] === Nightly Claude Code restart triggered ===
+[2026-06-13 00:00:03] Running pre-restart checkpoint...
+[2026-06-13 00:00:04] Pre-restart checkpoint completed.
+[2026-06-13 00:00:04] No Claude Code CLI process found running.
+[2026-06-13 00:00:06] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-13 00:00:06] === Done ===
+[2026-06-14 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-14 00:00:02] Running pre-restart checkpoint...
+[2026-06-14 00:00:03] Pre-restart checkpoint completed.
+[2026-06-14 00:00:03] Stopping Claude Code CLI PID 9324 - C:\Users\Legend\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe
+[2026-06-14 00:00:05] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-14 00:00:05] === Done ===
+[2026-06-15 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-15 00:00:02] Running pre-restart checkpoint...
+[2026-06-15 00:00:03] Pre-restart checkpoint completed.
+[2026-06-15 00:00:03] Stopping Claude Code CLI PID 17484 - C:\Users\Legend\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe
+[2026-06-15 00:00:05] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-15 00:00:05] === Done ===
+[2026-06-16 00:00:02] === Nightly Claude Code restart triggered ===
+[2026-06-16 00:00:02] Running pre-restart checkpoint...
+[2026-06-16 00:00:03] Pre-restart checkpoint completed.
+[2026-06-16 00:00:03] No Claude Code CLI process found running.
+[2026-06-16 00:00:05] Relaunched Claude Code in Windows Terminal at C:\Users\Legend\Documents\Claude\Projects\MemoryCore
+[2026-06-16 00:00:05] === Done ===

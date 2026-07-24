@@ -18,5 +18,16 @@ The most recent entries should be read at the start of each session to catch cro
 [2026-06-06 14:30] [TOOL: claude] Persona + tooling pass: merged Clover voice (warm companion + direct senior-engineer) in main-memory.md & greetings; master-memory tool-sync updated to Claude Code/Hermes/OpenCode/Antigravity (ChatGPT/Codex retired), knowledge base = Obsidian/Notion/NotebookLM; removed "Gemini CLI Native" footer; combo-wombo/9Router set as standing fallback; resolved both divergences (Claude Code installed; canonical vault = Legendary); created Cowork user_harith.md memory; wrote hermes correction prompt to vault hermes/Hermes-Memory-Correction-Prompt.md.
 [2026-06-06 15:30] [TOOL: claude] AI-Shoppee-Video: fixed G1 (shared render_and_enrich_row → single-row button now gets hook/caption/cover); added categorized error log logs/error-log.csv + classify_error + 500MB file-size guard; added Desktop mirror Desktop\Shopee Video Output\<Shop>\<Product>\{edited,raw} (--no-desktop-copy to disable). Tests 92→98, all green (live-run). Wrote SHOPEE-PROGRESS-REVIEW-2026-06-06.md.
 [2026-06-06 16:00] [TOOL: claude] AI-Shoppee-Video: hybrid media — download best video + product images (cap 8); render each video on its own and combine images into one slideshow MP4. Tests 98→99 green (live-run).
+[2026-06-09 23:30] [TOOL: claude] AI-Shoppee-Video: hermes-agent integration — added scripts/hermes_make_video.py (single-link worker, JSON out: original+edited paths) + 2 tests (99→101 green); installed ~/.hermes/skills/shopee-video/SKILL.md (one-at-a-time, prompt original vs edited, reuse @Legend_hermes_bot). LIVE E2E PASSED on TJean Shopee URL (ASV-0000009: 1 video + 8 images → 2 edited outputs + captions + cover + Desktop mirror). Note: URL-only intake leaves Shop Name blank → folder "untitled" (cosmetic).
+[2026-06-09 23:50] [TOOL: claude] AI-Shoppee-Video hermes: worker now accepts --shop/--product/--hook (written to masterlist DB before processing); skill asks Harith over Telegram for Shop Name + optional Product Name + Hook before running. Tests 101→102 green.
+[2026-06-10 00:05] [TOOL: claude] AI-Shoppee-Video hermes: original vs edited rule — --download-only (original) skips render & needs no shop; edited REQUIRES Shop Name (worker fails fast without it). Skill asks edited-or-original first. Tests 102→104 green.
 [2026-06-07 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
 [2026-06-08 00:00:04] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-09 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-10 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-11 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-12 00:00:02] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-13 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-14 00:00:02] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-15 00:00:02] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-06-16 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.

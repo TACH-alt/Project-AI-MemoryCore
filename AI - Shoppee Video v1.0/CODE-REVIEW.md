@@ -23,7 +23,16 @@ and leave it in place — don't delete history.
 
 ---
 
-## Review #1 — 2026-05-06 — Post-Phase-4 Audit + Phase-5 Research
+## Update — 2026-06-09 — hermes-agent integration (Telegram, single-link)
+
+**By:** Clover (Claude) · **Live E2E:** PASSED on the TJean Kitchen Set Shopee URL.
+
+- ✅ **`scripts/hermes_make_video.py`** — single-link worker for the local hermes-agent (10.10.10.5). One URL → intake → download → shared render+enrich → analyze → emits **one JSON line** (`record_id, status, original[], edited[], captions, cover, desktop, error`); stdout is JSON-only (pipeline prints go to stderr). 2 unit tests. Suite **99 → 101 green**.
+- ✅ **Hermes skill** `~/.hermes/skills/shopee-video/SKILL.md` — process links **one at a time** (finish before next; never parallel — masterlist isn't concurrency-safe); after each, ask **original vs edited** and deliver the chosen file(s) + captions over Telegram. No second bot (reuses `@Legend_hermes_bot`).
+- **Live run (ASV-0000009):** downloaded 1 video + 8 images → rendered **2 outputs** (video `…_new.mp4` + image slideshow `cn_new.mp4`), generated `captions.txt` (9Router/combo-wombo), `cover.jpg`, and mirrored to `Desktop\Shopee Video Output\…`. Status `Edited`, exit 0.
+- **Minor finding:** URL-only intake can't derive **Shop Name** from a Shopee slug → output folder became `untitled` and the caption "Shop:" line is blank.
+- ✅ **Editing/DB info collection (fixes the above):** worker now takes `--shop`, `--product`, `--hook`; these write straight into the masterlist row (our DB) before processing, so the folder/caption/hook are correct from the start. The skill **asks Harith over Telegram** for Shop Name + optional cleaner Product Name + custom Hook before running.
+- ✅ **Original vs edited rule (Harith, 2026-06-09):** `--download-only` path delivers the raw media only — **Shop Name optional**, no render. An **edited** run **requires Shop Name** (worker returns `Failed` "Shop Name is required" without it; skill asks until provided, choosing original/edited first). Tests: overrides applied, download-only skips render, edited-requires-shop. Suite **101 → 104 green**.
 
 **Reviewer:** Claude Opus 4.7
 **Trigger:** Phase 4A + 4B + 4D + 4E shipped earlier same day; user requested verification + improvement research before next phase

@@ -1430,5 +1430,156 @@ class HybridRenderTests(unittest.TestCase):
             self.assertEqual(len(edited), 2)
 
 
+class HermesMakeVideoTests(unittest.TestCase):
+    """The hermes single-link worker returns both original + edited paths as JSON."""
+
+    def _empty_masterlist(self, path: Path) -> None:
+        import process_shopee_video as psv
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            csv.DictWriter(fh, fieldnames=list(psv.REQUIRED_COLUMNS)).writeheader()
+
+    def test_make_one_video_returns_original_and_edited(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+        import hermes_make_video as hmv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._empty_masterlist(masterlist)
+            url = "https://shopee.com.my/widget-i.1.2"
+
+            def fake_collect(row, raw_dir):
+                raw_dir.mkdir(parents=True, exist_ok=True)
+                clip = raw_dir / "clip.mp4"
+                clip.write_bytes(b"v")
+                return [clip]
+
+            def fake_enrich(config, record, row, platform, product_folder, raw_files, log_path=None, error_log_path=None):
+                edited_dir = product_folder / "edited"
+                edited_dir.mkdir(parents=True, exist_ok=True)
+                out = edited_dir / "clip_new.mp4"
+                out.write_bytes(b"e")
+                psv.update_record(record, "Edited", "ok", product_folder, [out])
+                return "edited 1 video file(s)", [out]
+
+            with patch.object(psv, "collect_media", side_effect=fake_collect), \
+                    patch.object(psv, "render_and_enrich_row", side_effect=fake_enrich), \
+                    patch.object(psv, "analyze_row_record"):
+                result = hmv.make_one_video(url, root, masterlist, copy_to_desktop=False, shop="Test Shop")
+
+            self.assertEqual(result["status"], "Edited")
+            self.assertIsNone(result["error"])
+            self.assertTrue(result["record_id"].startswith("ASV-"))
+            self.assertEqual([Path(p).name for p in result["original"]], ["clip.mp4"])
+            self.assertEqual([Path(p).name for p in result["edited"]], ["clip_new.mp4"])
+
+    def test_make_one_video_reports_failure_on_no_media(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+        import hermes_make_video as hmv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._empty_masterlist(masterlist)
+            url = "https://shopee.com.my/widget-i.9.9"
+
+            with patch.object(psv, "collect_media", return_value=[]):
+                result = hmv.make_one_video(url, root, masterlist, copy_to_desktop=False, shop="Test Shop")
+
+            self.assertEqual(result["status"], "Failed")
+            self.assertEqual(psv.classify_error(result["error"]), "NO_MEDIA")
+            self.assertEqual(result["edited"], [])
+
+    def test_make_one_video_applies_shop_product_hook_overrides(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+        import hermes_make_video as hmv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._empty_masterlist(masterlist)
+            url = "https://shopee.com.my/widget-i.5.6"
+            captured = {}
+
+            def fake_collect(row, raw_dir):
+                captured["shop"] = row.shop_name
+                captured["product"] = row.product_name
+                raw_dir.mkdir(parents=True, exist_ok=True)
+                clip = raw_dir / "clip.mp4"
+                clip.write_bytes(b"v")
+                return [clip]
+
+            def fake_enrich(config, record, row, platform, product_folder, raw_files, log_path=None, error_log_path=None):
+                captured["hook"] = record.get("Hook")
+                edited_dir = product_folder / "edited"
+                edited_dir.mkdir(parents=True, exist_ok=True)
+                out = edited_dir / "clip_new.mp4"
+                out.write_bytes(b"e")
+                psv.update_record(record, "Edited", "ok", product_folder, [out])
+                return "edited", [out]
+
+            with patch.object(psv, "collect_media", side_effect=fake_collect), \
+                    patch.object(psv, "render_and_enrich_row", side_effect=fake_enrich), \
+                    patch.object(psv, "analyze_row_record"):
+                result = hmv.make_one_video(
+                    url, root, masterlist, copy_to_desktop=False,
+                    shop="TJean", product="Wok Set", hook="7 pcs for the price of 1",
+                )
+
+            self.assertEqual(result["shop_name"], "TJean")
+            self.assertEqual(result["product_name"], "Wok Set")
+            self.assertEqual(captured["shop"], "TJean")
+            self.assertEqual(captured["product"], "Wok Set")
+            self.assertEqual(captured["hook"], "7 pcs for the price of 1")
+
+    def test_make_one_video_download_only_skips_render(self):
+        from unittest.mock import patch
+        import process_shopee_video as psv
+        import hermes_make_video as hmv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._empty_masterlist(masterlist)
+            url = "https://shopee.com.my/widget-i.7.8"
+
+            def fake_collect(row, raw_dir):
+                raw_dir.mkdir(parents=True, exist_ok=True)
+                clip = raw_dir / "clip.mp4"
+                clip.write_bytes(b"v")
+                return [clip]
+
+            with patch.object(psv, "collect_media", side_effect=fake_collect), \
+                    patch.object(psv, "render_and_enrich_row") as enrich:
+                result = hmv.make_one_video(url, root, masterlist, copy_to_desktop=False, download_only=True)
+
+            # Original-only: no rendering, no shop required, raw media returned.
+            enrich.assert_not_called()
+            self.assertEqual(result["status"], "Downloaded")
+            self.assertEqual([Path(p).name for p in result["original"]], ["clip.mp4"])
+            self.assertEqual(result["edited"], [])
+            self.assertIsNone(result["error"])
+
+    def test_make_one_video_requires_shop_for_edited(self):
+        import process_shopee_video as psv
+        import hermes_make_video as hmv
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            masterlist = root / "masterlist" / "list.csv"
+            self._empty_masterlist(masterlist)
+            url = "https://shopee.com.my/widget-i.3.4"
+
+            # No shop, default (edited) → must fail fast with a shop-required error.
+            result = hmv.make_one_video(url, root, masterlist, copy_to_desktop=False)
+            self.assertEqual(result["status"], "Failed")
+            self.assertIn("shop name", (result["error"] or "").lower())
+
+
 if __name__ == "__main__":
     unittest.main()

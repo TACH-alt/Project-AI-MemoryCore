@@ -1,0 +1,17 @@
+Row 0: captions written to captions.txt
+Row 0: cover image written to cover.jpg
+Row 0: copied to Desktop -> C:\Users\Legend\Desktop\Shopee Video Output\untitled\TJean Kitchen Set Wok Pot Non stick Cookware Set (7 Pcs) PFAS PTFE PFOA Free Suitable All Stove Frying Pan Wok Soup Pot Saucepan
+Exception ignored while calling deallocator <function ZipFile.__del__ at 0x000001F5B7401640>:
+Traceback (most recent call last):
+  File "C:\Users\Legend\AppData\Local\Python\pythoncore-3.14-64\Lib\zipfile\__init__.py", line 2059, in __del__
+    self.close()
+  File "C:\Users\Legend\AppData\Local\Python\pythoncore-3.14-64\Lib\zipfile\__init__.py", line 2076, in close
+    self.fp.seek(self.start_dir)
+ValueError: I/O operation on closed file.
+Exception ignored while calling deallocator <function ZipFile.__del__ at 0x000001F5B7401640>:
+Traceback (most recent call last):
+  File "C:\Users\Legend\AppData\Local\Python\pythoncore-3.14-64\Lib\zipfile\__init__.py", line 2059, in __del__
+    self.close()
+  File "C:\Users\Legend\AppData\Local\Python\pythoncore-3.14-64\Lib\zipfile\__init__.py", line 2076, in close
+    self.fp.seek(self.start_dir)
+ValueError: I/O operation on closed file.
