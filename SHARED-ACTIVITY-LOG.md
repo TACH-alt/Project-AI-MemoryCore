@@ -31,3 +31,4 @@ The most recent entries should be read at the start of each session to catch cro
 [2026-06-14 00:00:02] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
 [2026-06-15 00:00:02] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
 [2026-06-16 00:00:03] [TOOL: claude] Nightly auto-checkpoint before scheduled restart.
+[2026-10-22 00:40] [TOOL: claude] Added library-items/security/cis-palo-alto-panos.md — CIS Benchmark assessment research for Palo Alto PAN-OS (PAN-OS 11 v1.2.0 = 79 items, no PAN-OS 12 benchmark yet, tooling: CIS-CAT offline / Nessus live / PAN BPA); listed in library-items/README.md.

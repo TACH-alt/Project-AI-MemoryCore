@@ -31,6 +31,7 @@ You can also browse items manually and copy any `.md` file directly into your `l
 | Section | Item | Description |
 |---------|------|-------------|
 | `security` | `security-headers` | HTTP security headers with CSP — framework-agnostic (Laravel, Express, Spring Boot, Nginx/Apache) |
+| `security` | `cis-palo-alto-panos` | CIS Benchmark assessment guide for Palo Alto PAN-OS firewalls — benchmark/version mapping, full 79-item checklist, tooling, methodology |
 
 ## Item Format
 
